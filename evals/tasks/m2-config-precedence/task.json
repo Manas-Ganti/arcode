@@ -1,0 +1,13 @@
+{
+  "id": "m2-config-precedence",
+  "prompt": "load_config in config/loader.py is wrong in three ways. (1) Precedence must be, lowest to highest: DEFAULTS < JSON file < APP_* environment variables < explicit overrides; env vars currently beat overrides. (2) Nested sections must be deep-merged: a file that only sets server.port must keep server.host from the defaults. (3) Env values arrive as strings: convert each to the type of the value it replaces (int, float, or bool, where true/1/yes mean True and false/0/no mean False, case-insensitive); env keys with no existing value stay strings. No input may be modified, including DEFAULTS.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix"
+  ]
+}

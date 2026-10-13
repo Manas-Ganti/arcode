@@ -1,0 +1,14 @@
+{
+  "id": "m2-json-patch",
+  "prompt": "jsonpatch/ implements part of RFC 6902 (JSON Patch: add, remove, replace) over RFC 6901 pointers. Fix apply_patch so that: pointer escapes decode correctly (~1 is '/', ~0 is '~', so the token '~01' is the key '~1'); 'remove' on a list removes the element at that index; 'add' to a list accepts '-' to append and an index equal to the list length (inserting otherwise); 'replace' needs the target to exist; the path '' (root) replaces the whole document for 'add'/'replace'. The input document must never be modified (return a new one). Any invalid operation (unknown op, missing key or index, index out of range, non-numeric list index, or removing the root) raises PatchError.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix",
+    "spec"
+  ]
+}

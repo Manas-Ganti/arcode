@@ -1,0 +1,17 @@
+{
+  "id": "poly-proverb",
+  "prompt": "# Instructions\n\nFor want of a horseshoe nail, a kingdom was lost, or so the saying goes.\n\nGiven a list of inputs, generate the relevant proverb.\nFor example, given the list `[\"nail\", \"shoe\", \"horse\", \"rider\", \"message\", \"battle\", \"kingdom\"]`, you will output the full text of this proverbial rhyme:\n\n```text\nFor want of a nail the shoe was lost.\nFor want of a shoe the horse was lost.\nFor want of a horse the rider was lost.\nFor want of a rider the message was lost.\nFor want of a message the battle was lost.\nFor want of a battle the kingdom was lost.\nAnd all for the want of a nail.\n```\n\nNote that the list of inputs may vary; your solution should be able to handle lists of arbitrary length and content.\nNo line of the output text should be a static, unchanging string; all should vary according to the input given.\n\n\n# Instructions append\n\nIn [concept:python/unpacking-and-multiple-assignment](https://github.com/exercism/python/tree/main/concepts/unpacking-and-multiple-assignment), you learned multiple techniques for working with `lists`/`tuples` of arbitrary length as well as function arguments of arbitrary length.\nThis exercise would be a great place to practice those techniques.\n\n## How this exercise is implemented for Python\n\nThe test cases for this track add an additional keyword argument called `qualifier`.\nYou should use this keyword arguments value to modify the final verse of your Proverb.\n\n---\nImplement this in `proverb.py`. The tests are in `proverb_test.py`; make them pass, and do not modify them. Keep the names of existing functions and classes, since the tests import them. Use only the Python standard library.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider proverb_test.py",
+  "max_turns": 30,
+  "timeout_s": 180,
+  "tags": [
+    "python",
+    "exercism",
+    "polyglot"
+  ],
+  "source": {
+    "repo": "https://github.com/Aider-AI/polyglot-benchmark",
+    "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+    "path": "python/exercises/practice/proverb"
+  }
+}

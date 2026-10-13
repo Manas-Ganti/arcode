@@ -1,0 +1,13 @@
+{
+  "id": "m2-ttl-cache-units",
+  "prompt": "Entries in TTLCache (cache/ttl.py) expire about 1000x too late. Fix expiry: an entry set at time t with ttl s is valid while now < t + s, and expired from t + s on. Also fix eviction: when the cache is full and a new key is set, first drop all expired entries, and only if it is still full evict the live entry that expires soonest. Tests use FakeClock from cache/clock.py.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix"
+  ]
+}

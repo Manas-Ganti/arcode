@@ -1,0 +1,14 @@
+{
+  "id": "m2-cli-subcommands",
+  "prompt": "Fix the todo CLI (todo/cli.py, todo/store.py): (1) -v/--verbose must work both before and after the subcommand (`todo -v list` and `todo list -v` behave the same). (2) Running with no subcommand must return the parser's usage text (what build_parser().format_usage() returns) instead of None. (3) `list` shows the highest priority first, ties in order of id, and --limit defaults to 10. (4) --limit must be a positive integer: 0 or a negative number is a usage error (argparse exits with SystemExit code 2).",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix",
+    "cli"
+  ]
+}

@@ -20,11 +20,17 @@ export interface EvalOptions {
   /** evals/results/<runId>/ — reusing a runId resumes it. */
   runDir: string;
   keepWorkdirs?: boolean;
+  /** Runs in parallel (default 1). ARC allows ~60 requests/min, so keep this small. */
+  concurrency?: number;
+  /** Wall-clock limit per run in seconds (default 900); the run is recorded with status "timeout". */
+  runTimeoutS?: number;
   log?: (line: string) => void;
 }
 
 export interface ResultRow {
   task: string;
+  /** "polyglot" (public Exercism), "hand-written" (new), or "smoke" (M1 sanity tasks). */
+  group: string;
   model: string;
   sample: number;
   resolved: boolean;
@@ -57,17 +63,25 @@ export async function runEval(base: Config, opts: EvalOptions): Promise<ResultRo
   const done = new Set(rows.map((r) => key(r.task, r.model, r.sample)));
   const harness_commit = await harnessCommit();
 
-  for (const model of opts.models) {
-    for (const task of opts.tasks) {
-      for (let sample = 0; sample < opts.samples; sample++) {
-        if (done.has(key(task.id, model, sample))) continue;
-        const row = await runOne(base, task, model, sample, opts, harness_commit);
-        rows.push(row);
-        await appendFile(resultsPath, JSON.stringify(row) + "\n");
-        log(`${row.resolved ? "PASS" : "FAIL"}  ${task.id.padEnd(28)} ${model.padEnd(34)} #${sample}  ${row.status.padEnd(9)} turns ${String(row.turns).padStart(2)}  ${row.wall_s}s${row.touched_protected.length ? (row.protected_lines_removed ? `  [CHANGED existing tests: -${row.protected_lines_removed} lines]` : "  [added tests]") : ""}${row.error ? `  ${row.error.slice(0, 80)}` : ""}`);
-      }
+  const jobs: [EvalTask, string, number][] = [];
+  for (const model of opts.models)
+    for (const task of opts.tasks)
+      for (let sample = 0; sample < opts.samples; sample++)
+        if (!done.has(key(task.id, model, sample))) jobs.push([task, model, sample]);
+
+  // A small worker pool: each worker takes the next job until none are left.
+  let next = 0, finished = 0;
+  const worker = async () => {
+    while (next < jobs.length) {
+      const [task, model, sample] = jobs[next++];
+      const row = await runOne(base, task, model, sample, opts, harness_commit);
+      rows.push(row);
+      await appendFile(resultsPath, JSON.stringify(row) + "\n");
+      finished++;
+      log(`[${finished}/${jobs.length}] ` + `${row.resolved ? "PASS" : "FAIL"}  ${task.id.padEnd(28)} ${model.padEnd(34)} #${sample}  ${row.status.padEnd(9)} turns ${String(row.turns).padStart(2)}  ${row.wall_s}s${row.touched_protected.length ? (row.protected_lines_removed ? `  [CHANGED existing tests: -${row.protected_lines_removed} lines]` : "  [added tests]") : ""}${row.error ? `  ${row.error.slice(0, 80)}` : ""}`);
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker));
   return rows;
 }
 
@@ -87,11 +101,12 @@ async function runOne(base: Config, task: EvalTask, model: string, sample: numbe
   await session.log({ type: "eval_task", task: task.id, sample, tags: task.tags ?? [] });
   const t0 = Date.now();
   let error: string | undefined;
+  const signal = AbortSignal.timeout((opts.runTimeoutS ?? 900) * 1000);
   try {
-    await runAgent(task.prompt, { config, session, tools: EVAL_TOOLS, approve: async () => true });
+    await runAgent(task.prompt, { config, session, tools: EVAL_TOOLS, approve: async () => true, signal });
   } catch (e: any) {
     error = e?.message ?? String(e);
-    session.meta.status = "error";
+    session.meta.status = signal.aborted ? "timeout" : "error";
     await session.log({ type: "error", message: error, body: e?.body });
     await session.save();
   }
@@ -108,6 +123,7 @@ async function runOne(base: Config, task: EvalTask, model: string, sample: numbe
   const tools = traj.filter((e) => e.type === "tool");
   return {
     task: task.id,
+    group: taskGroup(task),
     model,
     sample,
     resolved: g.resolved,
@@ -144,6 +160,17 @@ export function summarize(rows: ResultRow[]): string {
       `${m.padEnd(34)}  ${`${solved}/${n} (${Math.round((100 * solved) / n)}%)`.padEnd(14)}  ${avg((r) => r.turns).toFixed(1).padStart(5)}  ${Math.round(avg((r) => r.prompt_tokens + r.completion_tokens)).toString().padStart(10)}  ${(calls ? (100 * rs.reduce((s, r) => s + r.tool_errors, 0)) / calls : 0).toFixed(0).padStart(7)}%  ${String(rs.filter((r) => r.status === "max_turns").length).padStart(9)}  ${String(rs.filter((r) => (r.protected_lines_removed ?? r.touched_protected.length) > 0).length).padStart(13)}`,
     );
   }
+  // Resolve rate per task group: public exercises may be memorized; hand-written ones are new.
+  const groups = [...new Set(rows.map((r) => r.group ?? "smoke"))].sort();
+  if (groups.length > 1) {
+    lines.push("", `${"by group".padEnd(34)}  ${groups.map((g) => g.padEnd(16)).join("")}`);
+    for (const m of models) {
+      lines.push(`${m.padEnd(34)}  ${groups.map((g) => {
+        const rs = rows.filter((r) => r.model === m && (r.group ?? "smoke") === g);
+        return (rs.length ? `${rs.filter((r) => r.resolved).length}/${rs.length}` : "-").padEnd(16);
+      }).join("")}`);
+    }
+  }
   return lines.join("\n");
 }
 
@@ -160,6 +187,8 @@ export async function checkTasks(tasks: EvalTask[], log: (line: string) => void)
 }
 
 const key = (task: string, model: string, sample: number) => `${task}|${model}|${sample}`;
+
+const taskGroup = (t: EvalTask) => (t.tags?.includes("polyglot") ? "polyglot" : t.tags?.includes("hand-written") ? "hand-written" : "smoke");
 
 /** arcode's own commit (+ "-dirty"), so results can be tied to the harness version that produced them. */
 async function harnessCommit(): Promise<string> {

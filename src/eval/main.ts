@@ -15,6 +15,8 @@ export const EVAL_HELP = `arcode eval: run the agent on test-graded tasks and sc
 
   --tasks <dir>     task directory (default: ${join("evals", "tasks")} in the arcode repo)
   --run <id>        results go to evals/results/<id>/; reusing an id resumes it
+  --concurrency <n> runs in parallel (default 1; ARC allows ~60 requests/min)
+  --run-timeout <s> wall-clock limit per run (default 900); recorded as status "timeout"
   --keep            keep the per-run workdirs for inspection`;
 
 export async function evalMain(argv: string[]): Promise<void> {
@@ -22,7 +24,7 @@ export async function evalMain(argv: string[]): Promise<void> {
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, "");
     if (["check-tasks", "keep", "help"].includes(k)) a[k] = true;
-    else if (["tasks", "models", "samples", "run", "only"].includes(k)) a[k] = argv[++i];
+    else if (["tasks", "models", "samples", "run", "only", "concurrency", "run-timeout"].includes(k)) a[k] = argv[++i];
     else throw new Error(`unknown eval argument: ${argv[i]}\n\n${EVAL_HELP}`);
   }
   if (a.help) return console.log(EVAL_HELP);
@@ -47,6 +49,9 @@ export async function evalMain(argv: string[]): Promise<void> {
   const runDir = join(ROOT, "evals", "results", runId);
   const samples = Number(a.samples ?? 1);
   console.log(`run ${runId}: ${tasks.length} tasks × ${models.length} models × ${samples} samples → ${runDir}`);
-  const rows = await runEval(cfg, { tasks, models, samples, runDir, keepWorkdirs: Boolean(a.keep), log: console.log });
+  const rows = await runEval(cfg, {
+    tasks, models, samples, runDir, keepWorkdirs: Boolean(a.keep), log: console.log,
+    concurrency: Number(a.concurrency ?? 1), runTimeoutS: Number(a["run-timeout"] ?? 900),
+  });
   console.log(`\n${summarize(rows)}`);
 }

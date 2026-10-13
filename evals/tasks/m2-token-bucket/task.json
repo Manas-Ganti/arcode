@@ -1,0 +1,14 @@
+{
+  "id": "m2-token-bucket",
+  "prompt": "TokenBucket in ratelimit/bucket.py has two refill bugs: it under-refills when polled often (fractional tokens are lost, so rate=0.5 checked every second never refills), and it over-refills after idle periods (tokens grow past capacity, allowing bursts larger than capacity). Fix both. Then add wait_time(cost=1) to TokenBucket: the seconds until allow(cost) would succeed (0.0 if it would succeed now), without consuming tokens. A cost greater than capacity can never succeed: allow() and wait_time() must raise ValueError for it. KeyedLimiter (ratelimit/limiter.py) must keep working with independent buckets per key.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix",
+    "feature"
+  ]
+}

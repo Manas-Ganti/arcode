@@ -1,0 +1,13 @@
+{
+  "id": "m2-inventory-overbooking",
+  "prompt": "Orders can over-book stock in the shop/ package. After Inventory.reserve_many(), available() still reports those units as free, and an order with two lines for the same SKU can reserve more than is in stock. Fix it. reserve_many must stay all-or-nothing (if any line can't be reserved, raise OutOfStock and reserve nothing). SKUs are case- and whitespace-insensitive everywhere (\" widget \" and \"WIDGET\" are the same SKU).",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix"
+  ]
+}

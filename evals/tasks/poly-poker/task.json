@@ -1,0 +1,17 @@
+{
+  "id": "poly-poker",
+  "prompt": "# Instructions\n\nPick the best hand(s) from a list of poker hands.\n\nSee [Wikipedia][poker-hands] for an overview of poker hands.\n\n[poker-hands]: https://en.wikipedia.org/wiki/List_of_poker_hands\n\n---\nImplement this in `poker.py`. The tests are in `poker_test.py`; make them pass, and do not modify them. Keep the names of existing functions and classes, since the tests import them. Use only the Python standard library.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider poker_test.py",
+  "max_turns": 30,
+  "timeout_s": 180,
+  "tags": [
+    "python",
+    "exercism",
+    "polyglot"
+  ],
+  "source": {
+    "repo": "https://github.com/Aider-AI/polyglot-benchmark",
+    "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+    "path": "python/exercises/practice/poker"
+  }
+}

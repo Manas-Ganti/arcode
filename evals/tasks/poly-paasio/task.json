@@ -1,0 +1,17 @@
+{
+  "id": "poly-paasio",
+  "prompt": "# Instructions\n\nReport network IO statistics.\n\nYou are writing a [PaaS][paas], and you need a way to bill customers based on network and filesystem usage.\n\nCreate a wrapper for network connections and files that can report IO statistics.\nThe wrapper must report:\n\n- The total number of bytes read/written.\n- The total number of read/write operations.\n\n[paas]: https://en.wikipedia.org/wiki/Platform_as_a_service\n\n---\nImplement this in `paasio.py`. The tests are in `paasio_test.py`; make them pass, and do not modify them. Keep the names of existing functions and classes, since the tests import them. Use only the Python standard library.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider paasio_test.py",
+  "max_turns": 30,
+  "timeout_s": 180,
+  "tags": [
+    "python",
+    "exercism",
+    "polyglot"
+  ],
+  "source": {
+    "repo": "https://github.com/Aider-AI/polyglot-benchmark",
+    "commit": "7e0611e77b54e2dea774cdc0aa00cf9f7ed6144f",
+    "path": "python/exercises/practice/paasio"
+  }
+}

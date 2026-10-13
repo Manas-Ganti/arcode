@@ -1,0 +1,14 @@
+{
+  "id": "m2-install-order",
+  "prompt": "install_order in deps/resolver.py is supposed to return the packages needed for the given targets, each listed after all of its dependencies, but it lists packages before them. Fix it so that: every package comes after all of its dependencies; only packages the targets need are included, each once; the order is deterministic (depth-first: a package's dependencies are visited in alphabetical order, targets in the order given, and a package is listed as soon as all its dependencies are listed). A dependency cycle must raise CycleError with the cycle in the message, like \"a -> b -> c -> a\" (starting from the first package of the cycle that was reached).",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix",
+    "algorithm"
+  ]
+}

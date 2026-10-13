@@ -25,6 +25,8 @@ export interface AgentOptions {
   tools?: Tool[];
   approve: ToolContext["approve"];
   onEvent?: (e: AgentEvent) => void;
+  /** Aborts the run (e.g. an eval time limit): checked between turns and passed to model calls. */
+  signal?: AbortSignal;
 }
 
 const PROJECT_FILES = ["ARCODE.md", "AGENTS.md", "CLAUDE.md"];
@@ -70,6 +72,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
 
   let finalText = "";
   for (let turn = 0; turn < config.maxTurns; turn++) {
+    if (opts.signal?.aborted) throw new Error("run aborted (time limit)");
     if (estimateTokens(session.messages) > (config.contextBudget || defaultContextBudget(config.model))) {
       if (await compact({ llm, model: config.summaryModel, session })) onEvent({ type: "compaction" });
     }
@@ -80,6 +83,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
       messages: session.messages,
       tools: specs,
       temperature: config.temperature,
+      signal: opts.signal,
       onDelta: config.stream
         ? (d) => onEvent("content" in d ? { type: "delta", kind: "content", text: d.content } : { type: "delta", kind: "reasoning", text: d.reasoning })
         : undefined,

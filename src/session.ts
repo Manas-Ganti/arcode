@@ -12,7 +12,7 @@ export interface SessionMeta {
   workdir: string;
   model: string;
   task: string;
-  status: "running" | "done" | "error" | "max_turns" | "interrupted";
+  status: "running" | "done" | "error" | "max_turns" | "interrupted" | "timeout";
   turns: number;
   usage: { prompt: number; completion: number };
   compactions: number;

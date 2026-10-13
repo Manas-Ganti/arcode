@@ -91,6 +91,26 @@ const sysPrompt = JSON.parse(await readFile(join(runDir, "sessions", honest.sess
 checks.push(["web tools withheld in evals (specs and prompt)", !sysPrompt.includes("web_search") && sysPrompt.includes("run_tests")]);
 checks.push(["temperature logged per call", t0.filter((e) => e.type === "llm_call").every((e) => typeof e.temperature === "number")]);
 
+// Time limit and parallelism: a slow fake endpoint (300 ms per call) that never finishes the task.
+let inFlight = 0, maxInFlight = 0;
+const slow = createServer(async (req, res) => {
+  for await (const _ of req) { /* drain */ }
+  inFlight++;
+  maxInFlight = Math.max(maxInFlight, inFlight);
+  await new Promise((r) => setTimeout(r, 300));
+  inFlight--;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: null, tool_calls: [call("list_dir", {})] }, finish_reason: "tool_calls" }] }));
+});
+await new Promise<void>((r) => slow.listen(0, r));
+const slowCfg = loadConfig({ baseUrl: `http://127.0.0.1:${(slow.address() as any).port}/v1`, apiKey: "x", model: "mock", stream: false });
+const slowDir = await mkdtemp(join(tmpdir(), "arcode-evalslow-"));
+const timed = await runEval(slowCfg, { tasks, models: ["mock"], samples: 2, runDir: slowDir, concurrency: 2, runTimeoutS: 0.5 });
+slow.closeAllConnections();
+slow.close();
+checks.push(["run over its time limit is recorded as timeout", timed.length === 2 && timed.every((r) => r.status === "timeout" && !r.resolved)]);
+checks.push(["concurrency runs in parallel", maxInFlight === 2]);
+
 const log: string[] = [];
 checks.push(["check-tasks accepts a valid task", await checkTasks(tasks, (l) => log.push(l))]);
 await writeFile(join(T, "solution/add.js"), "exports.add = (a, b) => a * b;\n");

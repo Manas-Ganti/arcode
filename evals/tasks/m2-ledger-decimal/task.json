@@ -1,0 +1,14 @@
+{
+  "id": "m2-ledger-decimal",
+  "prompt": "The bank/ package stores money as floats, so 0.1 + 0.2 deposits don't add up to 0.30. Switch it to decimal.Decimal: balance() returns a Decimal with exactly two decimal places, and every amount is rounded half-up to cents (\"0.005\" -> 0.01, \"2.675\" -> 2.68). Amounts may be given as str, int or float (a float like 0.1 means 0.10). Deposit and transfer amounts must be positive (ValueError otherwise). transfer() must leave balances and history unchanged when it fails: raise UnknownAccount if either account doesn't exist (checked first), and InsufficientFunds if the source balance would go negative.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 40,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "hand-written",
+    "multi-file",
+    "bugfix",
+    "money"
+  ]
+}
