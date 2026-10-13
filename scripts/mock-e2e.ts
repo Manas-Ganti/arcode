@@ -166,7 +166,8 @@ const step = (i: number, str: string | undefined, key: object | undefined) => JS
 checks.push(["picker: arrows move and wrap", step(0, undefined, { name: "down" }) === '{"index":1}' && step(0, undefined, { name: "up" }) === '{"index":3}' && step(3, undefined, { name: "down" }) === '{"index":0}']);
 checks.push(["picker: Enter selects, digit jumps", step(2, "\r", { name: "return" }) === '{"done":2}' && step(0, "3", { name: "3" }) === '{"done":2}' && step(0, "9", { name: "9" }) === '{"index":0}']);
 checks.push(["picker: Esc and Ctrl+C cancel", step(1, undefined, { name: "escape" }) === '{"cancel":true}' && step(1, "\u0003", { name: "c", ctrl: true }) === '{"cancel":true}']);
-checks.push(["Option+M detected in both terminal modes", isModelHotkey("µ", undefined) && !!isModelHotkey("\u001bm", { name: "m", meta: true }) && !isModelHotkey("m", { name: "m" })]);
+checks.push(["hotkey: Ctrl+O, and Option+M in both terminal modes", !!isModelHotkey("\u000f", { name: "o", ctrl: true }) && isModelHotkey("µ", undefined) && !!isModelHotkey("\u001bm", { name: "m", meta: true })]);
+checks.push(["hotkey: plain M, Shift+M and o are just text", !isModelHotkey("m", { name: "m" }) && !isModelHotkey("M", { name: "m", shift: true } as any) && !isModelHotkey("o", { name: "o" })]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;

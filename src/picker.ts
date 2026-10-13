@@ -65,5 +65,10 @@ export function pickFromList(title: string, labels: string[], initial: number): 
   });
 }
 
-/** Option+M: macOS terminals send ESC m ("Use Option as Meta") or the character µ (default). */
-export const isModelHotkey = (str: string | undefined, key: Key | undefined) => (key?.meta && key.name === "m") || str === "µ";
+/**
+ * Model-picker hotkey. Ctrl+O works in every terminal. Option+M is also accepted, but terminals
+ * deliver it inconsistently (ESC m with "Option as Meta", µ by default, or nothing).
+ * Shift+M can't be used (it's just "M"), nor Cmd+M (the terminal app keeps it).
+ */
+export const isModelHotkey = (str: string | undefined, key: Key | undefined) =>
+  (key?.ctrl && key.name === "o") || (key?.meta && key.name === "m") || str === "µ";

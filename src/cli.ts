@@ -41,7 +41,7 @@ Options:
 Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
 In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  exit (or /exit, Ctrl+D)
-  Option+M (or /model) opens the model picker: ↑/↓ to move, Enter to select, Esc to cancel.`;
+  Ctrl+O (or /model) opens the model picker: ↑/↓ to move, Enter to select, Esc to cancel.`;
 
 function parseArgs(argv: string[]) {
   const a: Record<string, string | boolean> = {};
@@ -261,11 +261,11 @@ async function main() {
   }
   if (!rl) throw new Error("no TTY: use -p \"task\" for headless runs");
 
-  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · ⌥M model · /help · exit to quit`));
+  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · Ctrl+O model · /help · exit to quit`));
   let closed = false;
   rl.on("close", () => { closed = true; });
 
-  // Option+M opens the model picker: at the prompt right away, during a task once it finishes.
+  // Ctrl+O (or Option+M) opens the model picker: at the prompt right away, during a task once it finishes.
   const openPicker = async () => {
     const models = await chatModels(cfg).catch(() => [] as string[]);
     if (!models.length) return console.log(c.yellow("could not list models; use /model <id>"));
@@ -278,7 +278,7 @@ async function main() {
   stdin.on("keypress", (str: string | undefined, key: any) => {
     if (!isModelHotkey(str, key)) return;
     if (!busy) promptAbort?.abort();
-    else if (!pickerQueued) { pickerQueued = true; onEvent.notice("model picker opens after this task (⌥M)"); }
+    else if (!pickerQueued) { pickerQueued = true; onEvent.notice("model picker opens after this task (Ctrl+O)"); }
   });
 
   while (!closed) {
