@@ -34,7 +34,7 @@ Options:
 
 Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
-In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  /exit
+In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  exit (or /exit, Ctrl+D)
   /model with no argument lists the endpoint's models to pick from.`;
 
 function parseArgs(argv: string[]) {
@@ -208,13 +208,14 @@ async function main() {
   }
   if (!rl) throw new Error("no TTY: use -p \"task\" for headless runs");
 
-  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · /help`));
+  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · /help · exit to quit`));
   let closed = false;
   rl.on("close", () => { closed = true; });
   while (!closed) {
     let line: string;
     try { line = (await rl.question(c.bold("› "))).trim(); } catch { break; }
     if (!line) continue;
+    if (/^(exit|quit)$/i.test(line)) break; // bare words, like a shell; /exit works too
     if (line.startsWith("/")) {
       const [cmd, ...rest] = line.slice(1).split(/\s+/);
       if (cmd === "exit" || cmd === "quit") break;

@@ -37,7 +37,7 @@ arcode --sessions | --models
 -m <model>  --show-reasoning  --max-turns <n>
 ```
 
-REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, `/exit`. With no model configured, interactive mode opens a numbered model picker (Enter takes the default GLM). `/model` reopens it mid-session; `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. One key covers every model, and the compaction model and context budget follow the switch.
+REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, and `exit` (or `/exit`, Ctrl+D) to quit. With no model configured, interactive mode opens a numbered model picker (Enter takes the default GLM). `/model` reopens it mid-session; `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. One key covers every model, and the compaction model and context budget follow the switch.
 
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
 
