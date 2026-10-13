@@ -4,6 +4,8 @@
  * reasoning models) for trajectory logging.
  */
 
+import { modelSpec } from "./models.js";
+
 export interface ToolCall {
   id: string;
   type: "function";
@@ -35,7 +37,8 @@ export class LLMError extends Error {
 }
 
 export class LLM {
-  constructor(private baseUrl: string, private apiKey: string) {}
+  /** `extraBody` is merged into every chat request, after the model's own params from models.ts. */
+  constructor(private baseUrl: string, private apiKey: string, private extraBody: Record<string, unknown> = {}) {}
 
   async listModels(): Promise<string[]> {
     const res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/models`, {
@@ -55,6 +58,8 @@ export class LLM {
     signal?: AbortSignal;
   }): Promise<ChatResult> {
     const body: Record<string, unknown> = {
+      ...modelSpec(opts.model).params,
+      ...this.extraBody,
       model: opts.model,
       messages: opts.messages,
       temperature: opts.temperature ?? 0.2,
@@ -95,11 +100,13 @@ export class LLM {
       const choice = json.choices?.[0];
       if (!choice) throw new LLMError("no choices in response", res.status, JSON.stringify(json).slice(0, 2000));
       const m = choice.message ?? {};
+      // DeepSeek-style servers use `reasoning_content`; vLLM-style (incl. VT ARC) use `reasoning`.
+      const reasoning = m.reasoning_content || m.reasoning;
       const message: ChatResult["message"] = {
         role: "assistant",
         content: m.content ?? null,
         ...(m.tool_calls?.length ? { tool_calls: normalizeToolCalls(m.tool_calls) } : {}),
-        ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}),
+        ...(reasoning ? { reasoning_content: reasoning } : {}),
       };
       return { message, finishReason: choice.finish_reason ?? "unknown", usage: json.usage, latencyMs: Date.now() - t0 };
     }

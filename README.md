@@ -12,7 +12,7 @@ A minimal, readable coding agent for any OpenAI-compatible endpoint. Built again
 
 ```bash
 npm install
-export ARC_API_KEY=sk-...            # llm.arc.vt.edu > Settings > Account > API keys
+mkdir -p ~/.arcode && (umask 077; echo 'ARC_API_KEY=sk-...' > ~/.arcode/.env)   # llm.arc.vt.edu > Settings > Account > API keys
 npm run probe                        # check tool calling works for each model
 npm run dev                          # interactive, in the current directory
 npm run dev -- -p "add a --verbose flag to cli.ts" --yes   # headless
@@ -37,7 +37,7 @@ arcode --sessions | --models
 -m <model>  --show-reasoning  --max-turns <n>
 ```
 
-REPL commands: `/plan`, `/notes`, `/compact`, `/model <id>`, `/session`, `/exit`.
+REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, `/exit`. With no model configured, interactive mode opens a numbered model picker (Enter takes the default GLM). `/model` reopens it mid-session; `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. One key covers every model, and the compaction model and context budget follow the switch.
 
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
 
@@ -46,12 +46,19 @@ Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the r
 | Env | Default |
 |---|---|
 | `ARC_BASE_URL` | `https://llm-api.arc.vt.edu/api/v1` |
-| `ARC_API_KEY` | (required) |
+| `ARC_API_KEY` | (required; `VTARC_API_KEY` also accepted) |
 | `ARCODE_MODEL` | first GLM model listed, then DeepSeek |
 | `ARCODE_SUMMARY_MODEL` | same as model |
-| `ARCODE_CONTEXT_BUDGET` | `100000` (estimated tokens before compaction) |
+| `ARCODE_CONTEXT_BUDGET` | 75% of the model's context window (`src/models.ts`), in estimated tokens before compaction |
+| `ARCODE_EXTRA_BODY` | none. JSON merged into every request, e.g. `{"reasoning_effort":"high"}` or `{"chat_template_kwargs":{"enable_thinking":false}}` |
 | `ARCODE_MAX_TURNS` | `60` |
 | `ARCODE_HOME` | `~/.arcode` |
+
+Any of these can go in `$ARCODE_HOME/.env` instead of your shell profile; real environment variables win. The `.env` in the repo you're working on is never read.
+
+### Models on VT ARC
+
+Pick thinking effort with the model id (`gpt-oss-120b-thinking-high`, `DeepSeek-V4.1-Flash-thinking-max`, …); the gateway applies it. Measured 2026-10-13: the gpt-oss variants change reasoning length about 8x; the DeepSeek and GLM variants showed no clear difference on a single sample. The non-streaming proxy caps `max_tokens` at 8000.
 
 ## Tests
 

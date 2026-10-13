@@ -7,18 +7,19 @@
  *   1. plain chat works
  *   2. native tool calling returns structured `tool_calls`
  *   3. the model accepts a tool result and continues (round trip)
- *   4. whether `reasoning_content` is exposed (matters for trajectory logging)
+ *   4. whether reasoning is exposed (`reasoning_content` or ARC's `reasoning`; matters for trajectory logging)
  *   5. parallel tool calls in one turn
  */
 import { LLM, type Message, type ToolSpec } from "../src/llm.js";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, loadEnvFile } from "../src/config.js";
 
+loadEnvFile();
 const cfg = loadConfig();
 if (!cfg.apiKey) {
   console.error("Set ARC_API_KEY first (llm.arc.vt.edu > Settings > Account > API keys).");
   process.exit(1);
 }
-const llm = new LLM(cfg.baseUrl, cfg.apiKey);
+const llm = new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody);
 
 const weatherTool: ToolSpec = {
   type: "function",

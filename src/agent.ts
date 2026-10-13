@@ -6,6 +6,7 @@ import { LLM, type Message, type ToolCall } from "./llm.js";
 import { Session } from "./session.js";
 import { ALL_TOOLS, toSpecs, type Tool, type ToolContext } from "./tools/index.js";
 import { compact, estimateTokens } from "./context.js";
+import { defaultContextBudget } from "./models.js";
 
 export type AgentEvent =
   | { type: "assistant_text"; text: string }
@@ -51,7 +52,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
   const tools = opts.tools ?? ALL_TOOLS;
   const byName = new Map(tools.map((t) => [t.name, t]));
   const specs = toSpecs(tools);
-  const llm = new LLM(config.baseUrl, config.apiKey);
+  const llm = new LLM(config.baseUrl, config.apiKey, config.extraBody);
   const ctx: ToolContext = {
     config,
     session,
@@ -67,7 +68,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
 
   let finalText = "";
   for (let turn = 0; turn < config.maxTurns; turn++) {
-    if (estimateTokens(session.messages) > config.contextBudget) {
+    if (estimateTokens(session.messages) > (config.contextBudget || defaultContextBudget(config.model))) {
       if (await compact({ llm, model: config.summaryModel, session })) onEvent({ type: "compaction" });
     }
 

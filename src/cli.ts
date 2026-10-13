@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { createInterface, type Interface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { loadConfig, type Config } from "./config.js";
+import { loadConfig, loadEnvFile, type Config } from "./config.js";
+import { defaultContextBudget, modelSpec, resolveModel } from "./models.js";
 import { LLM } from "./llm.js";
 import { Session } from "./session.js";
 import { runAgent, type AgentEvent } from "./agent.js";
@@ -31,9 +32,10 @@ Options:
   --show-reasoning               print model reasoning text when present
   --max-turns <n>                cap on agent turns per task
 
-Env: ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
+Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
-In the REPL: /plan  /notes  /compact  /model <id>  /session  /help  /exit`;
+In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  /exit
+  /model with no argument lists the endpoint's models to pick from.`;
 
 function parseArgs(argv: string[]) {
   const a: Record<string, string | boolean> = {};
@@ -57,12 +59,31 @@ function parseArgs(argv: string[]) {
   return a;
 }
 
-async function pickModel(cfg: Config): Promise<string> {
-  if (cfg.model) return cfg.model;
-  const models = await new LLM(cfg.baseUrl, cfg.apiKey).listModels();
+let modelCache: string[] | undefined;
+/** Chat models on the endpoint (embedding models filtered out), fetched once per process. */
+async function chatModels(cfg: Config): Promise<string[]> {
+  modelCache ??= (await new LLM(cfg.baseUrl, cfg.apiKey).listModels()).filter((m) => !/embed/i.test(m));
+  return modelCache;
+}
+
+function defaultModel(models: string[]): string {
   const pref = models.find((m) => /glm/i.test(m)) ?? models.find((m) => /deepseek/i.test(m)) ?? models[0];
   if (!pref) throw new Error("endpoint returned no models; pass --model");
   return pref;
+}
+
+/** Numbered picker. Enter keeps `current`; returns undefined on an invalid choice. */
+async function chooseModel(rl: Interface, models: string[], current: string): Promise<string | undefined> {
+  const w = Math.max(...models.map((m) => m.length));
+  models.forEach((m, i) => {
+    const s = modelSpec(m);
+    const ctx = s.known ? `${s.contextWindow / 1000}k` : "?";
+    const line = `${m === current ? "*" : " "} ${String(i + 1).padStart(2)}  ${m.padEnd(w)}  ${ctx}`;
+    console.log(m === current ? c.cyan(line) : line);
+  });
+  const ans = (await rl.question(c.dim(`model [1-${models.length}, Enter keeps ${current}]: `))).trim();
+  if (!ans) return current;
+  return resolveModel(ans, models);
 }
 
 function renderer(showReasoning: boolean) {
@@ -90,6 +111,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(HELP);
 
+  loadEnvFile();
   const cfg = loadConfig();
   if (args.yes) cfg.autoApprove = true;
   if (args.maxTurns) cfg.maxTurns = Number(args.maxTurns);
@@ -101,7 +123,7 @@ async function main() {
     }
     return;
   }
-  if (!cfg.apiKey) throw new Error("ARC_API_KEY is not set (get one at llm.arc.vt.edu > Settings > Account > API keys)");
+  if (!cfg.apiKey) throw new Error("ARC_API_KEY is not set: put it in ~/.arcode/.env or the environment (get one at llm.arc.vt.edu > Settings > Account > API keys)");
   if (args.models) return console.log((await new LLM(cfg.baseUrl, cfg.apiKey).listModels()).join("\n"));
 
   // Resume or start fresh.
@@ -115,10 +137,26 @@ async function main() {
     session.messages.push({ role: "assistant", content: "Resumed. I'll re-read files before editing." });
     console.log(c.dim(`resumed ${session.meta.id}\n${session.renderTodos()}`));
   }
-  cfg.model = await pickModel(cfg);
-  cfg.summaryModel ||= cfg.model;
-
   const rl: Interface | undefined = stdin.isTTY ? createInterface({ input: stdin, output: stdout }) : undefined;
+  // Interactive with no model configured: let the user pick (Enter takes the default).
+  if (!cfg.model) {
+    const models = await chatModels(cfg);
+    cfg.model = defaultModel(models);
+    if (rl && typeof args.prompt !== "string") cfg.model = (await chooseModel(rl, models, cfg.model)) ?? cfg.model;
+  }
+  // The summary model follows the main model unless ARCODE_SUMMARY_MODEL pins it.
+  const pinnedSummary = Boolean(process.env.ARCODE_SUMMARY_MODEL);
+  cfg.summaryModel ||= cfg.model;
+  warnUnknownModel(cfg.model);
+
+  /** One place for everything model-dependent; the key and endpoint are shared by all models. */
+  const setModel = (id: string) => {
+    cfg.model = id;
+    if (!pinnedSummary) cfg.summaryModel = id;
+    if (session) session.meta.model = id; // per-call model stays in trajectory llm_call events
+    warnUnknownModel(id);
+    console.log(c.dim(`model → ${id} (compaction budget ~${Math.round((cfg.contextBudget || defaultContextBudget(id)) / 1000)}k tokens)`));
+  };
   const approve = async (summary: string) => {
     if (!rl) return false; // headless without --yes: deny side effects
     const ans = (await rl.question(c.yellow(`allow ${summary}? [y/N/a=always] `))).trim().toLowerCase();
@@ -163,9 +201,15 @@ async function main() {
       else if (cmd === "plan") console.log(session?.renderTodos() ?? "(no session yet)");
       else if (cmd === "notes") console.log(session?.notes.map((n) => `- ${n}`).join("\n") || "(none)");
       else if (cmd === "session") console.log(session ? `${session.dir}\n${JSON.stringify(session.meta, null, 2)}` : "(no session yet)");
-      else if (cmd === "model") { if (rest[0]) { cfg.model = rest[0]; if (session) session.meta.model = rest[0]; } console.log(cfg.model); }
+      else if (cmd === "model") {
+        const models = await chatModels(cfg).catch(() => [] as string[]);
+        const picked = rest[0] ? (models.length ? resolveModel(rest[0], models) : rest[0]) : models.length ? await chooseModel(rl, models, cfg.model) : undefined;
+        if (picked && picked !== cfg.model) setModel(picked);
+        else if (!picked) console.log(c.yellow(`not a listed model${rest[0] ? `: ${rest[0]}` : ""}; /model shows the list`));
+        else console.log(c.dim(`model: ${cfg.model}`));
+      }
       else if (cmd === "compact" && session) {
-        const did = await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey), model: cfg.summaryModel, session });
+        const did = await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody), model: cfg.summaryModel, session });
         await session.save();
         console.log(did ? "compacted" : "nothing to compact");
       } else console.log(`unknown command /${cmd}`);
@@ -175,6 +219,10 @@ async function main() {
   }
   rl.close();
   if (session && session.meta.status === "running") { session.meta.status = "interrupted"; await session.save(); }
+}
+
+function warnUnknownModel(id: string) {
+  if (!modelSpec(id).known) console.log(c.dim(`note: ${id} is not in models.ts; assuming a ${modelSpec(id).contextWindow / 1000}k context and no extra params`));
 }
 
 main().catch((e) => {

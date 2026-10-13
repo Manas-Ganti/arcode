@@ -11,7 +11,8 @@ src/
   llm.ts        OpenAI-compatible client (raw fetch, retries/backoff on 429/5xx)
   context.ts    token estimate + compaction (summarize middle, keep head/tail)
   session.ts    on-disk session: messages, trajectory, todos, notes
-  config.ts     env-driven config
+  config.ts     env-driven config (+ $ARCODE_HOME/.env)
+  models.ts     per-model context window and request params, matched by id prefix
   tools/
     fs.ts       read_file, edit_file, write_file, list_dir, grep (workspace-confined)
     shell.ts    bash (timeout, output truncation, approval-gated)
@@ -83,4 +84,4 @@ Ordered by expected impact on usefulness and on research value.
 
 **Robustness**
 10. Exact token counts via the endpoint's `usage` instead of the char estimate.
-11. A per-model quirks table (tool-call format, reasoning field names, max context) filled from `npm run probe`.
+11. A per-model quirks table (tool-call format, reasoning field names, max context) filled from `npm run probe`. Started in `models.ts`; context windows there are still unverified.
