@@ -4,6 +4,15 @@ import { truncate } from "./types.js";
 
 export interface CommandResult { code: number | null; out: string; timedOut: boolean }
 
+/** arcode's own credentials: never passed to commands the model runs, so `env` can't leak them into trajectories. */
+const ARCODE_SECRETS = ["ARC_API_KEY", "VTARC_API_KEY", "BRAVE_API_KEY", "TAVILY_API_KEY"];
+
+function childEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, CI: "1", PAGER: "cat" };
+  for (const k of ARCODE_SECRETS) delete env[k];
+  return env;
+}
+
 /**
  * Run a command with `bash -c` in `cwd`, merging stdout/stderr, killed after `timeoutMs`. Never rejects.
  * Not `-l`: on macOS a login shell rebuilds PATH with system dirs first (python3 → /usr/bin/python3),
@@ -11,7 +20,7 @@ export interface CommandResult { code: number | null; out: string; timedOut: boo
  */
 export function runCommand(command: string, cwd: string, timeoutMs: number): Promise<CommandResult> {
   return new Promise((resolve) => {
-    const p = spawn("bash", ["-c", command], { cwd, env: { ...process.env, CI: "1", PAGER: "cat" } });
+    const p = spawn("bash", ["-c", command], { cwd, env: childEnv() });
     let out = "";
     let timedOut = false;
     const timer = setTimeout(() => {

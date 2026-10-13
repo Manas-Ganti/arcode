@@ -2,5 +2,9 @@ node_modules/
 dist/
 .arcode/
 *.log
+# secrets: never commit keys (arcode reads ~/.arcode/.env, outside the repo)
 .env
+.env.*
+*.env
+!.env.example
 evals/results/*/sessions/

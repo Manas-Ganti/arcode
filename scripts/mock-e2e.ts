@@ -12,6 +12,7 @@ import { defaultContextBudget, modelSpec, resolveModel } from "../src/models.js"
 import { Session } from "../src/session.js";
 import { LLM } from "../src/llm.js";
 import { MarkdownStream, renderMarkdown } from "../src/markdown.js";
+import { runCommand } from "../src/tools/shell.js";
 import { runAgent } from "../src/agent.js";
 
 let n = 0;
@@ -130,6 +131,12 @@ checks.push(["markdown: heading and bullet", mdLines[5].includes(`${B}`) && !mdL
 const ms = new MarkdownStream(80);
 const streamedMd = ms.push("a **b") + ms.push("old** c\nnext *x*") + ms.flush();
 checks.push(["markdown: span split across stream chunks is styled on redraw", streamedMd.includes(`${B}bold`) && streamedMd.includes(`${I}x`)]);
+
+// Credentials must not reach commands the model runs (they'd land in trajectories via `env`).
+process.env.ARC_API_KEY = "sk-secret-test-value";
+process.env.ARCODE_TEST_VISIBLE = "kept";
+const envOut = (await runCommand("env", tmpdir(), 10_000)).out;
+checks.push(["API keys withheld from agent commands", !envOut.includes("sk-secret-test-value") && envOut.includes("ARCODE_TEST_VISIBLE=kept")]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;
