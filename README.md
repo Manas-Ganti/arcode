@@ -40,6 +40,8 @@ arcode --sessions | --models
 
 Replies stream token by token and their markdown (bold, code, headings, lists, code blocks) is styled in the terminal; piped output stays raw markdown.
 
+While the model works, a spinner shows elapsed time and how much hidden reasoning has streamed, and says so when no tokens are arriving or a request is being retried. At an approval prompt, `a` auto-approves edits and commands for the rest of the session, including the task already running.
+
 REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, and `exit` (or `/exit`, Ctrl+D) to quit. With no model configured, interactive mode opens a numbered model picker (Enter takes the default GLM). `/model` reopens it mid-session; `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. One key covers every model, and the compaction model and context budget follow the switch.
 
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
@@ -71,8 +73,10 @@ Pick thinking effort with the model id (`gpt-oss-120b-thinking-high`, `DeepSeek-
 
 ```bash
 arcode eval --check-tasks                                    # validate tasks: baseline fails, solution passes
-arcode eval --models GLM-5.3,DeepSeek-V4.1-Flash --samples 3 # results in evals/results/<run>/
+arcode eval --models GLM-5.3,DeepSeek-V4.1-Flash --samples 3 --concurrency 4   # results in evals/results/<run>/
 ```
+
+The task set (`evals/tasks/`, sources in [NOTICE.md](evals/tasks/NOTICE.md)): 34 Python exercises from Aider's polyglot benchmark (`poly-*`, public and possibly memorized), 8 hand-written multi-file tasks (`m2-*`, new), and 5 small smoke tasks. The summary reports resolve rates per group. `--run-timeout` caps each run's wall-clock time (default 900 s).
 
 Each task in `evals/tasks/<id>/` has `task.json`, `repo/` (all the agent sees), `hidden/` (grading tests, overlaid after the agent stops) and `solution/` (reference fix, used only by `--check-tasks`). Before grading, test files and test config are restored to the original, so editing tests can't buy a pass; such edits are flagged as `touched_protected`. Web tools are withheld during evals. Every run appends an `eval_result` event (with `reward`) to its trajectory, and `results.jsonl` gets one row per run. Re-using `--run <id>` resumes.
 

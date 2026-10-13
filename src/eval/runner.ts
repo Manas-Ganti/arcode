@@ -45,6 +45,7 @@ export interface ResultRow {
   wall_s: number;
   touched_protected: string[];
   protected_lines_removed: number;
+  tests_weakened: number;
   diff_stat: string;
   session_id: string;
   temperature: number;
@@ -78,7 +79,7 @@ export async function runEval(base: Config, opts: EvalOptions): Promise<ResultRo
       rows.push(row);
       await appendFile(resultsPath, JSON.stringify(row) + "\n");
       finished++;
-      log(`[${finished}/${jobs.length}] ` + `${row.resolved ? "PASS" : "FAIL"}  ${task.id.padEnd(28)} ${model.padEnd(34)} #${sample}  ${row.status.padEnd(9)} turns ${String(row.turns).padStart(2)}  ${row.wall_s}s${row.touched_protected.length ? (row.protected_lines_removed ? `  [CHANGED existing tests: -${row.protected_lines_removed} lines]` : "  [added tests]") : ""}${row.error ? `  ${row.error.slice(0, 80)}` : ""}`);
+      log(`[${finished}/${jobs.length}] ` + `${row.resolved ? "PASS" : "FAIL"}  ${task.id.padEnd(28)} ${model.padEnd(34)} #${sample}  ${row.status.padEnd(9)} turns ${String(row.turns).padStart(2)}  ${row.wall_s}s${row.touched_protected.length ? (row.tests_weakened ? `  [WEAKENED tests: ${row.tests_weakened} assertions/tests removed]` : "  [edited tests, none weakened]") : ""}${row.error ? `  ${row.error.slice(0, 80)}` : ""}`);
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker));
@@ -114,7 +115,7 @@ async function runOne(base: Config, task: EvalTask, model: string, sample: numbe
 
   const g = await grade(task, work);
   // The reward goes into the trajectory too, so every eval run is labelled RL/SFT data.
-  await session.log({ type: "eval_result", task: task.id, resolved: g.resolved, reward: g.resolved ? 1 : 0, tests_passed: g.tests_passed, tests_failed: g.tests_failed, touched_protected: g.touched_protected, protected_lines_removed: g.protected_lines_removed });
+  await session.log({ type: "eval_result", task: task.id, resolved: g.resolved, reward: g.resolved ? 1 : 0, tests_passed: g.tests_passed, tests_failed: g.tests_failed, touched_protected: g.touched_protected, protected_lines_removed: g.protected_lines_removed, tests_weakened: g.tests_weakened });
   await writeFile(join(session.dir, "eval_diff.patch"), g.diff);
   await writeFile(join(session.dir, "eval_grade_output.txt"), g.grade_output);
   if (!opts.keepWorkdirs) await rm(work, { recursive: true, force: true });
@@ -138,6 +139,7 @@ async function runOne(base: Config, task: EvalTask, model: string, sample: numbe
     wall_s,
     touched_protected: g.touched_protected,
     protected_lines_removed: g.protected_lines_removed,
+    tests_weakened: g.tests_weakened,
     diff_stat: g.diff_stat,
     session_id: session.meta.id,
     temperature: config.temperature,
@@ -149,7 +151,7 @@ async function runOne(base: Config, task: EvalTask, model: string, sample: numbe
 
 export function summarize(rows: ResultRow[]): string {
   const models = [...new Set(rows.map((r) => r.model))];
-  const lines = ["model                               resolved        turns  tokens/run  tool err  max_turns  changed-tests"];
+  const lines = ["model                               resolved        turns  tokens/run  tool err  max_turns  weakened-tests"];
   for (const m of models) {
     const rs = rows.filter((r) => r.model === m);
     const n = rs.length;
@@ -157,7 +159,7 @@ export function summarize(rows: ResultRow[]): string {
     const avg = (f: (r: ResultRow) => number) => rs.reduce((s, r) => s + f(r), 0) / n;
     const calls = rs.reduce((s, r) => s + r.tool_calls, 0);
     lines.push(
-      `${m.padEnd(34)}  ${`${solved}/${n} (${Math.round((100 * solved) / n)}%)`.padEnd(14)}  ${avg((r) => r.turns).toFixed(1).padStart(5)}  ${Math.round(avg((r) => r.prompt_tokens + r.completion_tokens)).toString().padStart(10)}  ${(calls ? (100 * rs.reduce((s, r) => s + r.tool_errors, 0)) / calls : 0).toFixed(0).padStart(7)}%  ${String(rs.filter((r) => r.status === "max_turns").length).padStart(9)}  ${String(rs.filter((r) => (r.protected_lines_removed ?? r.touched_protected.length) > 0).length).padStart(13)}`,
+      `${m.padEnd(34)}  ${`${solved}/${n} (${Math.round((100 * solved) / n)}%)`.padEnd(14)}  ${avg((r) => r.turns).toFixed(1).padStart(5)}  ${Math.round(avg((r) => r.prompt_tokens + r.completion_tokens)).toString().padStart(10)}  ${(calls ? (100 * rs.reduce((s, r) => s + r.tool_errors, 0)) / calls : 0).toFixed(0).padStart(7)}%  ${String(rs.filter((r) => r.status === "max_turns").length).padStart(9)}  ${String(rs.filter((r) => (r.tests_weakened ?? r.protected_lines_removed ?? r.touched_protected.length) > 0).length).padStart(14)}`,
     );
   }
   // Resolve rate per task group: public exercises may be memorized; hand-written ones are new.

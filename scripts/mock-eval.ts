@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { loadConfig } from "../src/config.js";
 import { checkTasks, runEval } from "../src/eval/runner.js";
 import { loadTasks } from "../src/eval/task.js";
+import { countWeakened } from "../src/eval/grade.js";
 import { detectTestCommand, parseTestCounts } from "../src/tools/tests.js";
 
 // Fixture task. The tiny test runner prints a pytest-style summary line so counts parse.
@@ -83,6 +84,10 @@ checks.push(["reward written to trajectory", t0.some((e) => e.type === "eval_res
 checks.push(["diff saved", (await readFile(join(runDir, "sessions", honest.session_id, "eval_diff.patch"), "utf8")).includes("+exports.add = (a, b) => a + b;")]);
 checks.push(["tampering does not pass", !tamper.resolved && tamper.tests_failed! > 0]);
 checks.push(["tampered test files flagged", tamper.touched_protected.includes("tests/visible.test.cjs") && tamper.touched_protected.includes("tests/hidden.test.cjs") && tamper.protected_lines_removed > 0]);
+checks.push(["tampering counts as weakened tests", tamper.tests_weakened > 0]);
+checks.push(["edited import + added tests is not weakening", countWeakened("--- a/t.py\n+++ b/t.py\n-from x import a\n+from x import a, b\n+def test_new():\n+    assert a()") === 0]);
+checks.push(["moved assertion is not weakening", countWeakened("-    assert f(1) == 2\n+    assert f(1) == 2") === 0]);
+checks.push(["removed assertion is weakening", countWeakened("-    assert f(1) == 2\n+    pass") === 1]);
 checks.push(["honest run changed no tests", honest.touched_protected.length === 0 && honest.protected_lines_removed === 0]);
 checks.push(["looping run hits max_turns", loop.status === "max_turns" && !loop.resolved && loop.turns === 3]);
 checks.push(["results.jsonl has one row per run", (await readFile(join(runDir, "results.jsonl"), "utf8")).trim().split("\n").length === 3]);
@@ -110,6 +115,8 @@ slow.closeAllConnections();
 slow.close();
 checks.push(["run over its time limit is recorded as timeout", timed.length === 2 && timed.every((r) => r.status === "timeout" && !r.resolved)]);
 checks.push(["concurrency runs in parallel", maxInFlight === 2]);
+const timedTraj = (await readFile(join(slowDir, "sessions", timed[0].session_id, "trajectory.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+checks.push(["cut-off call logged as llm_aborted", timedTraj.some((e) => e.type === "llm_aborted" && e.elapsed_ms >= 0)]);
 
 const log: string[] = [];
 checks.push(["check-tasks accepts a valid task", await checkTasks(tasks, (l) => log.push(l))]);

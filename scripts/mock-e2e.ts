@@ -113,11 +113,13 @@ const stallServer = createServer(async (req, res) => {
 });
 await new Promise<void>((r) => stallServer.listen(0, r));
 const stallLLM = new LLM(`http://127.0.0.1:${(stallServer.address() as any).port}/v1`, "x", {}, 300);
-const streamed = await stallLLM.chat({ model: "m", messages: [{ role: "user", content: "hi" }], onDelta: () => {} }).catch((e) => e);
+const retries: string[] = [];
+const streamed = await stallLLM.chat({ model: "m", messages: [{ role: "user", content: "hi" }], onDelta: () => {}, onRetry: (r) => retries.push(r.reason) }).catch((e) => e);
 const buffered = await stallLLM.chat({ model: "m", messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
 stallServer.closeAllConnections();
 stallServer.close();
 checks.push(["stalled stream is aborted and retried", streamed?.message?.content === "recovered" && streamed.attempts === 2]);
+checks.push(["retry reason reported as stalled", retries[0] === "stalled"]);
 checks.push(["stalled buffered request is aborted and retried", buffered?.message?.content === "recovered" && stallHits === 4]);
 
 // Markdown → ANSI (ESC[1m bold, ESC[3m italic, ESC[36m code).
@@ -137,6 +139,26 @@ process.env.ARC_API_KEY = "sk-secret-test-value";
 process.env.ARCODE_TEST_VISIBLE = "kept";
 const envOut = (await runCommand("env", tmpdir(), 10_000)).out;
 checks.push(["API keys withheld from agent commands", !envOut.includes("sk-secret-test-value") && envOut.includes("ARCODE_TEST_VISIBLE=kept")]);
+
+// "Always allow" chosen at the first prompt must cover the rest of the *current* task.
+let alwaysN = 0;
+const alwaysServer = createServer(async (req, res) => {
+  for await (const _ of req) { /* drain */ }
+  const step = alwaysN++;
+  const msg = step === 0 ? { content: null, tool_calls: [call("write_file", { path: "a.txt", content: "a" })] }
+    : step === 1 ? { content: null, tool_calls: [call("write_file", { path: "b.txt", content: "b" }), call("bash", { command: "true" })] }
+    : { content: "done" };
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify({ choices: [{ message: { role: "assistant", ...msg }, finish_reason: msg.tool_calls ? "tool_calls" : "stop" }] }));
+});
+await new Promise<void>((r) => alwaysServer.listen(0, r));
+const alwaysWork = await mkdtemp(join(tmpdir(), "arcode-always-"));
+const alwaysCfg = loadConfig({ baseUrl: `http://127.0.0.1:${(alwaysServer.address() as any).port}/v1`, apiKey: "x", model: "mock", workdir: alwaysWork, dataDir: data, autoApprove: false, stream: false });
+let prompts = 0;
+const alwaysApprove = async () => { prompts++; alwaysCfg.autoApprove = true; return true; }; // the user pressed "a"
+await runAgent("write two files", { config: alwaysCfg, session: await Session.create(data, alwaysWork, "mock", "t"), approve: alwaysApprove });
+alwaysServer.close();
+checks.push(["'a' (always allow) applies to the rest of the running task", prompts === 1 && (await readFile(join(alwaysWork, "b.txt"), "utf8")) === "b"]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;

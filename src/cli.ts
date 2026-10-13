@@ -18,6 +18,8 @@ const c = {
   bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
 };
 
+const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+
 const HELP = `arcode - minimal coding agent for OpenAI-compatible endpoints
 
 Usage:
@@ -96,15 +98,42 @@ function renderer(showReasoning: boolean) {
   // Markdown is styled only on a terminal; piped output stays raw markdown.
   const tty = Boolean(stdout.isTTY);
   let md = new MarkdownStream(stdout.columns || 80);
+  // Spinner while the model is working: elapsed time, hidden reasoning progress, silence and retries.
+  let spin: { timer: ReturnType<typeof setInterval>; start: number; model: string; reasoning: number; lastData: number; retry?: string } | undefined;
+  const drawSpin = () => {
+    if (!spin) return;
+    const now = Date.now();
+    const frame = SPINNER[Math.floor((now - spin.start) / 80) % SPINNER.length];
+    const parts = [`thinking · ${spin.model} · ${Math.floor((now - spin.start) / 1000)}s`];
+    if (spin.reasoning) parts.push(`reasoning ${spin.reasoning >= 1000 ? `${(spin.reasoning / 1000).toFixed(1)}k` : spin.reasoning} chars`);
+    const quiet = Math.floor((now - spin.lastData) / 1000);
+    if (quiet >= 15) parts.push(spin.reasoning ? `no new tokens for ${quiet}s` : "waiting for the model");
+    if (spin.retry) parts.push(spin.retry);
+    const text = `${frame} ${parts.join(" · ")}`.slice(0, (stdout.columns || 80) - 1);
+    stdout.write(`\r\x1b[2K${c.cyan(text.slice(0, 1))}${c.dim(text.slice(1))}`);
+  };
+  const stopSpin = () => {
+    if (spin) clearInterval(spin.timer);
+    spin = undefined;
+  };
   const endLine = () => {
+    stopSpin();
     if (lineKind === "status") stdout.write("\r\x1b[2K");
     else if (lineKind === "content" && tty) stdout.write(md.flush() + "\n");
     else if (lineKind) stdout.write("\n");
     lineKind = undefined;
   };
   return (e: AgentEvent) => {
+    if (e.type === "llm_retry") {
+      if (spin) spin.retry = `retry ${e.attempt} (${e.reason}${e.status ? ` ${e.status}` : ""})`;
+      return;
+    }
     if (e.type === "delta") {
-      if (e.kind === "reasoning" && !showReasoning) return; // keep the "thinking…" line up
+      if (spin) spin.lastData = Date.now();
+      if (e.kind === "reasoning" && !showReasoning) {
+        if (spin) spin.reasoning += e.text.length; // the spinner shows it; keep the line up
+        return;
+      }
       if (lineKind !== e.kind) endLine();
       stdout.write(e.kind === "reasoning" ? c.dim(e.text) : tty ? md.push(e.text) : e.text);
       streamed[e.kind] = true;
@@ -116,7 +145,12 @@ function renderer(showReasoning: boolean) {
       case "llm_start":
         streamed = { content: false, reasoning: false };
         md = new MarkdownStream(stdout.columns || 80);
-        if (stdout.isTTY) { stdout.write(c.dim(`thinking… (${e.model})`)); lineKind = "status"; }
+        if (stdout.isTTY) {
+          const now = Date.now();
+          spin = { timer: setInterval(drawSpin, 80), start: now, model: e.model, reasoning: 0, lastData: now };
+          drawSpin();
+          lineKind = "status";
+        }
         break;
       case "reasoning": if (showReasoning && !streamed.reasoning) console.log(c.dim(e.text.trim())); break;
       case "assistant_text": if (!streamed.content) console.log(tty ? renderMarkdown(e.text.trim()) : e.text.trim()); break;
@@ -190,7 +224,11 @@ async function main() {
   const approve = async (summary: string) => {
     if (!rl) return false; // headless without --yes: deny side effects
     const ans = (await rl.question(c.yellow(`allow ${summary}? [y/N/a=always] `)).catch(() => "")).trim().toLowerCase(); // closed stdin = deny
-    if (ans === "a") { cfg.autoApprove = true; return true; }
+    if (ans === "a") {
+      cfg.autoApprove = true;
+      console.log(c.dim("  auto-approving file edits and commands for the rest of this session"));
+      return true;
+    }
     return ans === "y" || ans === "yes";
   };
   const onEvent = renderer(Boolean(args.reasoning));
@@ -200,6 +238,7 @@ async function main() {
     try {
       await runAgent(input, { config: cfg, session, approve, onEvent });
     } catch (e: any) {
+      onEvent({ type: "done", status: "error", finalText: "" }); // stops the spinner before printing the error
       session.meta.status = "error";
       await session.log({ type: "error", message: e?.message, body: e?.body });
       await session.save();

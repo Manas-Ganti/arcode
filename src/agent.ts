@@ -12,6 +12,7 @@ export type AgentEvent =
   | { type: "assistant_text"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "llm_start"; model: string }
+  | { type: "llm_retry"; attempt: number; reason: string; status?: number }
   /** Streamed fragment; `assistant_text`/`reasoning` still follow with the full text. */
   | { type: "delta"; kind: "content" | "reasoning"; text: string }
   | { type: "tool_start"; name: string; args: any }
@@ -60,7 +61,8 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
   const ctx: ToolContext = {
     config,
     session,
-    approve: config.autoApprove ? async () => true : approve,
+    // Checked per call, so "always allow" chosen mid-task applies to the rest of that task too.
+    approve: async (summary) => config.autoApprove || approve(summary),
   };
 
   if (session.messages.length === 0) {
@@ -78,16 +80,35 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
     }
 
     onEvent({ type: "llm_start", model: config.model });
-    const res = await llm.chat({
-      model: config.model,
-      messages: session.messages,
-      tools: specs,
-      temperature: config.temperature,
-      signal: opts.signal,
-      onDelta: config.stream
-        ? (d) => onEvent("content" in d ? { type: "delta", kind: "content", text: d.content } : { type: "delta", kind: "reasoning", text: d.reasoning })
-        : undefined,
-    });
+    // Streamed sizes so far: if the call fails or is cut off, they show a stall (0) vs a runaway generation.
+    const streamedChars = { content: 0, reasoning: 0 };
+    const callStart = Date.now();
+    let res;
+    try {
+      res = await llm.chat({
+        model: config.model,
+        messages: session.messages,
+        tools: specs,
+        temperature: config.temperature,
+        signal: opts.signal,
+        onRetry: (r) => {
+          void session.log({ type: "llm_retry", model: config.model, ...r });
+          onEvent({ type: "llm_retry", attempt: r.attempt, reason: r.reason, status: r.status });
+        },
+        onDelta: config.stream
+          ? (d) => {
+              if ("content" in d) { streamedChars.content += d.content.length; onEvent({ type: "delta", kind: "content", text: d.content }); }
+              else { streamedChars.reasoning += d.reasoning.length; onEvent({ type: "delta", kind: "reasoning", text: d.reasoning }); }
+            }
+          : undefined,
+      });
+    } catch (e: any) {
+      await session.log({
+        type: "llm_aborted", model: config.model, elapsed_ms: Date.now() - callStart, message: e?.message ?? String(e),
+        streamed_content_chars: streamedChars.content, streamed_reasoning_chars: streamedChars.reasoning,
+      });
+      throw e;
+    }
     let msg = res.message;
     if (!msg.tool_calls?.length && msg.content) msg = recoverTextToolCalls(msg, byName);
 

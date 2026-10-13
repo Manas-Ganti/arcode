@@ -72,6 +72,8 @@ export class LLM {
     signal?: AbortSignal;
     /** If set, the request streams (SSE) and fragments arrive here as they are generated. */
     onDelta?: (d: Delta) => void;
+    /** Called before each retry, so callers can log why requests are being repeated. */
+    onRetry?: (r: { attempt: number; reason: "stalled" | "network" | "http"; status?: number; elapsedMs: number }) => void;
   }): Promise<ChatResult> {
     const body: Record<string, unknown> = {
       ...modelSpec(opts.model).params,
@@ -116,6 +118,7 @@ export class LLM {
           const text = await res.text();
           clearTimeout(timer);
           if (attempt >= maxAttempts) throw new LLMError(`chat failed after ${attempt} attempts: ${res.status}`, res.status, text);
+          opts.onRetry?.({ attempt, reason: "http", status: res.status, elapsedMs: Date.now() - t0 });
           const retryAfter = Number(res.headers.get("retry-after"));
           await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoff(attempt));
           continue;
@@ -149,6 +152,7 @@ export class LLM {
         if (attempt >= maxAttempts) {
           throw stalled ? new LLMError(`no data from the endpoint for ${this.timeoutMs / 1000}s (stalled), ${attempt} attempts`) : e;
         }
+        opts.onRetry?.({ attempt, reason: stalled ? "stalled" : "network", elapsedMs: Date.now() - t0 });
         await sleep(backoff(attempt));
       } finally {
         clearTimeout(timer);

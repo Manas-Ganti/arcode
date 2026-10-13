@@ -28,9 +28,10 @@ src/
 scripts/
   probe-arc.ts  verifies tool calling / reasoning fields per ARC model
   mock-e2e.ts   offline test against a scripted fake endpoint
-  mock-eval.ts  offline test of the eval runner: honest fix, test tampering, max_turns, resume
+  mock-eval.ts  offline test of the eval runner: honest fix, test tampering, max_turns, resume, timeout, concurrency
+  import-polyglot.ts  imports Aider's polyglot Python exercises as eval tasks
 evals/
-  tasks/        5 Python tasks (M1); results/<run>/results.jsonl (sessions/ is gitignored)
+  tasks/        47 Python tasks (see tasks/NOTICE.md); results/<run>/results.jsonl (sessions/ is gitignored)
 ```
 
 ## The loop (agent.ts)
@@ -64,7 +65,7 @@ Edit safety: `edit_file` and overwriting `write_file` require the file was `read
 - Eval sessions also get `eval_task` and `eval_result` (`resolved`, `reward`, test counts, `touched_protected`) events, plus `eval_diff.patch` and `eval_grade_output.txt`.
 - `meta.json`: task, model, status (`done | error | max_turns | interrupted`), turns, token usage, compactions
 - `messages.json`: the current context window (what gets resumed)
-- `trajectory.jsonl`: one event per line: `session_start`, `user`, `llm_call` (full message, usage, latency, finish reason, context size, temperature, attempts), `tool` (name, args, ok, ms, output), `todos`, `note`, `compaction`, `error`
+- `trajectory.jsonl`: one event per line: `session_start`, `user`, `llm_call` (full message, usage, latency, finish reason, context size, temperature, attempts), `tool` (name, args, ok, ms, output), `todos`, `note`, `compaction`, `error`, `llm_retry` (attempt, reason: stalled | network | http, elapsed), `llm_aborted` (a call that failed or was cut off: elapsed time and how much content/reasoning had streamed). Every event has an ISO timestamp `t`
 - `todos.json`, `notes.md`
 
 The trajectory format is the research hook. Every run, interactive or benchmark, becomes (state, action, observation) data with outcome metadata.
@@ -88,7 +89,7 @@ Ordered by expected impact on usefulness and on research value.
 5. MCP client so external tool servers plug in without code changes.
 
 **Evaluation / research**
-6. `arcode eval`: a headless runner over SWE-bench Lite/Verified-style tasks in containers, writing `results.jsonl` with pass/fail per instance. M1 done (runner, grader, 5 tasks, run_tests). M2: container, concurrency, wall-clock timeout, 30-50 tasks. M3: report with paired statistics.
+6. `arcode eval`: a headless runner over SWE-bench Lite/Verified-style tasks in containers, writing `results.jsonl` with pass/fail per instance. M1 done (runner, grader, 5 tasks, run_tests). M2 mostly done: 42 harder tasks (34 polyglot + 8 hand-written), concurrency, per-run time limit; the container runner is still missing (Docker isn't available on the dev machine). M3: report with paired statistics.
 7. Model comparison report: GLM vs DeepSeek on the same task set (resolve rate, turns, tokens, tool error rate).
 8. Trajectory exporter to chat-format SFT data and to (prompt, completion, reward) tuples for GRPO-style training.
 9. Ablations: compaction on/off, todo tool on/off, text-fallback vs native tool calls.
