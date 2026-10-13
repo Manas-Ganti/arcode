@@ -11,6 +11,7 @@ src/
   llm.ts        OpenAI-compatible client (raw fetch, SSE streaming, retries/backoff on 429/5xx)
   context.ts    token estimate + compaction (summarize middle, keep head/tail)
   session.ts    on-disk session: messages, trajectory, todos, notes
+  mcp.ts        MCP client (stdio): ~/.arcode/mcp.json servers → mcp__<server>__<tool> tools
   commands.ts   custom /commands (markdown prompt files) and `!shell` context framing
   picker.ts     arrow-key list picker (model selection, Ctrl+O)
   markdown.ts   markdown → ANSI styling for terminal replies (line-based, stream-aware)
@@ -72,6 +73,17 @@ Edit safety: `edit_file` and overwriting `write_file` require the file was `read
 
 The trajectory format is the research hook. Every run, interactive or benchmark, becomes (state, action, observation) data with outcome metadata.
 
+## Configuration files
+
+Everything lives in `$ARCODE_HOME` (default `~/.arcode`), never in the repo being worked on:
+
+| File | What | Notes |
+|---|---|---|
+| `.env` | API key and settings (`ARC_API_KEY`, ...) | loaded by `loadEnvFile()`; shell env wins; template in `.env.example` |
+| `mcp.json` | MCP servers (`mcpServers`, Claude Code format) | each entry is a command arcode runs, so home only |
+| `commands/*.md` | personal custom `/commands` | projects can add `.arcode/commands/*.md` (prompt text only, so safe) |
+| `sessions/` | session store and trajectories | |
+
 ## Safety model
 
 - File tools are confined to the workspace root (path traversal rejected).
@@ -88,7 +100,7 @@ Ordered by expected impact on usefulness and on research value.
 2. Repo map: a tree-sitter or ctags symbol index injected at session start, so the model doesn't spend turns on `list_dir`.
 3. Diff preview on edit approvals, plus `git` checkpoint/undo per task.
 4. Ink-based TUI (status bar with model, tokens, plan) once the core stabilizes.
-5. MCP client so external tool servers plug in without code changes.
+5. ~~MCP client so external tool servers plug in without code changes.~~ Done for stdio servers (`mcp.ts`); HTTP transport still to do.
 
 **Evaluation / research**
 6. `arcode eval`: a headless runner over SWE-bench Lite/Verified-style tasks in containers, writing `results.jsonl` with pass/fail per instance. M1 done (runner, grader, 5 tasks, run_tests). M2 mostly done: 42 harder tasks (34 polyglot + 8 hand-written), concurrency, per-run time limit; the container runner is still missing (Docker isn't available on the dev machine). M3: report with paired statistics.

@@ -9,23 +9,53 @@ A minimal, readable coding agent for any OpenAI-compatible endpoint. Built again
 - **Trajectory logging**: every model call and tool result goes to an append-only JSONL file per session, ready for evaluation or RL training data
 - **Zero runtime dependencies**: Node 20+ only
 
+## Setup
+
+You need Node 20+ and an API key for an OpenAI-compatible endpoint. arcode is built for **Virginia Tech ARC's hosted models** (free for VT accounts), but any `/v1/chat/completions` endpoint works.
+
+**1. Install**
+
+```bash
+git clone https://github.com/Manas-Ganti/arcode.git && cd arcode
+npm install
+npm run build && npm link      # optional: puts an `arcode` command on your PATH
+```
+
+**2. Get an ARC API key**
+
+Sign in at [llm.arc.vt.edu](https://llm.arc.vt.edu) with your VT account, then open your profile > **Settings > Account > API keys** and create a key. One key works for every model ARC hosts (GLM, DeepSeek, gpt-oss, ...); you pick the model inside arcode.
+
+**3. Put the key where arcode reads it: `~/.arcode/.env`**
+
+```bash
+mkdir -p ~/.arcode && cp .env.example ~/.arcode/.env && chmod 600 ~/.arcode/.env
+# then edit ~/.arcode/.env and replace sk-your-key-here with your key
+```
+
+**4. Check it works**
+
+```bash
+npm run probe        # lists the endpoint's models and checks chat + tool calling for each
+```
+
+### How arcode finds the key
+
+- At startup, arcode loads `~/.arcode/.env` (or `$ARCODE_HOME/.env` if you set `ARCODE_HOME`) with Node's built-in `process.loadEnvFile`, then reads `ARC_API_KEY`, falling back to `VTARC_API_KEY` (`src/config.ts`).
+- Variables already set in your shell win over the file, so `export ARC_API_KEY=...` also works (handy for CI or a cluster job).
+- A `.env` file **inside a repo is never read**, including this one. arcode works on other people's repos, and their `.env` belongs to them, not to arcode. It also keeps your key out of every project folder, so it can't be committed by accident (`.gitignore` covers `.env`, `.env.*` and `*.env` too).
+- The key is only sent as the `Authorization: Bearer` header to `ARC_BASE_URL`. It is **not** passed to commands the agent runs (`bash`, `run_tests`, `!command`) or to MCP servers, so a model running `env` can't copy it into a trajectory.
+- Using a different provider: set `ARC_BASE_URL` (e.g. a local vLLM server at `http://localhost:8000/v1`) and put that provider's key in `ARC_API_KEY`.
+
+**If it doesn't work:** `ARC_API_KEY is not set` means the file isn't at `~/.arcode/.env` or the variable name is wrong. A `401` from `npm run probe` means the key is invalid or revoked; make a new one on llm.arc.vt.edu.
+
 ## Quick start
 
 ```bash
-npm install
-mkdir -p ~/.arcode && (umask 077; echo 'ARC_API_KEY=sk-...' > ~/.arcode/.env)   # llm.arc.vt.edu > Settings > Account > API keys
-npm run probe                        # check tool calling works for each model
-npm run dev                          # interactive, in the current directory
-npm run dev -- -p "add a --verbose flag to cli.ts" --yes   # headless
+arcode                                        # interactive, in the current directory (or: npm run dev)
+arcode -p "add a --verbose flag to cli.ts" --yes   # headless
 ```
 
-Optional web search (pick one):
-
-```bash
-export BRAVE_API_KEY=...      # or
-export TAVILY_API_KEY=...     # or
-export SEARXNG_URL=http://localhost:8080
-```
+Optional web search for the agent: add one of `BRAVE_API_KEY`, `TAVILY_API_KEY` or `SEARXNG_URL` to `~/.arcode/.env`.
 
 ## Usage
 
@@ -56,6 +86,21 @@ description: Review a file for bugs without editing it
 ---
 Review $ARGUMENTS for bugs. Run the tests first. Report findings as a list; don't edit files.
 ```
+
+### MCP servers
+
+arcode can use tools from [MCP](https://modelcontextprotocol.io) servers (local stdio servers for now). List them in `~/.arcode/mcp.json`, in the same format Claude Code and Claude Desktop use:
+
+```json
+{
+  "mcpServers": {
+    "callcentre": { "command": "uv", "args": ["run", "/path/to/server.py"] },
+    "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "..." } }
+  }
+}
+```
+
+Servers start with arcode and their tools appear as `mcp__<server>__<tool>`; `/mcp` lists them. A server that fails to start is reported and skipped. Calls go through the approval prompt unless the server marks a tool read-only. The config is read only from your home folder, never from a repo, because each entry is a command arcode runs. arcode's own API keys aren't passed to servers; give a server the variables it needs in its `env`. Evals (`arcode eval`) never load MCP tools, so results don't depend on what's installed.
 
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
 

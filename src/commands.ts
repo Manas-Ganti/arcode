@@ -14,7 +14,7 @@ import { join } from "node:path";
 export interface CustomCommand { name: string; description: string; body: string; path: string; scope: "project" | "user" }
 
 /** Names the REPL handles itself; a command file can't shadow them. */
-export const BUILTIN_COMMANDS = ["help", "plan", "notes", "session", "model", "compact", "commands", "exit", "quit"];
+export const BUILTIN_COMMANDS = ["help", "plan", "notes", "session", "model", "compact", "commands", "mcp", "exit", "quit"];
 
 const NAME = /^[a-z0-9][a-z0-9_-]*$/i;
 

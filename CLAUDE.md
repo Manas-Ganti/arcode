@@ -35,7 +35,7 @@ Before finishing any change: run `typecheck` and `test:mock`, and add a mock-e2e
 
 - ESM with `NodeNext` resolution: relative imports end in `.js`.
 - Strict TypeScript. Avoid `any` outside JSON-boundary code (`llm.ts`, `web.ts`).
-- Config comes from env in `config.ts`; no config files yet.
+- Config comes from env in `config.ts`. User config lives in `~/.arcode/` (`.env` with the API key, `mcp.json`, `commands/`), never in a repo: don't add code that reads keys or MCP servers from the workdir. Never commit keys; `.env.example` is the template.
 
 ## Shared agent knowledge base (call centre MCP)
 

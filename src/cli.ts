@@ -14,6 +14,8 @@ import { expandCommand, loadCommands, parseSlash, shellContext } from "./command
 import { runCommand } from "./tools/shell.js";
 import { truncate } from "./tools/types.js";
 import { homedir } from "node:os";
+import { startMcp } from "./mcp.js";
+import { ALL_TOOLS } from "./tools/index.js";
 
 const c = {
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
@@ -44,7 +46,7 @@ Options:
 
 Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
-In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /commands  /help  exit (or /exit, Ctrl+D)
+In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /commands  /mcp  /help  exit (or /exit, Ctrl+D)
   !<command>   run a shell command directly; its output goes to the model with your next message
   /<name> args run a saved prompt from .arcode/commands/<name>.md or ~/.arcode/commands/<name>.md
   Ctrl+O (or /model) opens the model picker: ↑/↓ to move, Enter to select, Esc to cancel.`;
@@ -244,6 +246,14 @@ async function main() {
   };
   const onEvent = renderer(Boolean(args.reasoning));
 
+  // MCP servers from ~/.arcode/mcp.json: their tools join the built-in ones. Failures are reported, not fatal.
+  const mcp = await startMcp(cfg.dataDir);
+  if (mcp.status.length) console.log(c.dim(`mcp: ${mcp.status.join(" · ")}`));
+  process.on("exit", () => mcp.close());
+  // Killed or terminal closed: shut the MCP servers down too ("exit" handlers don't run on signals).
+  for (const sig of ["SIGTERM", "SIGHUP"] as const) process.on(sig, () => { mcp.close(); process.exit(128 + (sig === "SIGTERM" ? 15 : 1)); });
+  const tools = [...ALL_TOOLS, ...mcp.tools];
+
   // Output of `!command` lines, sent to the model with the next message.
   let pendingShell: string[] = [];
   const run = async (typed: string) => {
@@ -251,7 +261,7 @@ async function main() {
     pendingShell = [];
     session ??= await Session.create(cfg.dataDir, cfg.workdir, cfg.model, typed);
     try {
-      await runAgent(input, { config: cfg, session, approve, onEvent });
+      await runAgent(input, { config: cfg, session, tools, approve, onEvent });
     } catch (e: any) {
       onEvent({ type: "done", status: "error", finalText: "" }); // stops the spinner before printing the error
       session.meta.status = "error";
@@ -277,6 +287,7 @@ async function main() {
     if (args.prompt.startsWith("/") && !custom) throw new Error(`no command file for ${args.prompt.split(/\s/)[0]} (see /commands in the REPL)`);
     await run(custom ?? args.prompt);
     rl?.close();
+    mcp.close();
     process.exitCode = session?.meta.status === "done" ? 0 : 1;
     return;
   }
@@ -350,6 +361,13 @@ async function main() {
         if (session) await session.save();
         console.log(did ? "compacted" : "nothing to compact");
       }
+      else if (cmd === "mcp") {
+        if (!mcp.status.length) console.log(c.dim(`no MCP servers. Add them to ${cfg.dataDir.replace(homedir(), "~")}/mcp.json ({"mcpServers": {...}}, same format as Claude Code) and restart.`));
+        else {
+          console.log(mcp.status.join("\n"));
+          for (const t of mcp.tools) console.log(c.dim(`  ${t.name}${t.mutates ? "" : "  (read-only, no approval)"}`));
+        }
+      }
       else if (cmd === "commands") {
         const all = [...(await loadCommands(cfg.workdir, cfg.dataDir)).values()];
         if (!all.length) console.log(c.dim("no custom commands. Add markdown files to .arcode/commands/ (this project) or ~/.arcode/commands/ (everywhere)."));
@@ -367,6 +385,7 @@ async function main() {
     busy = false;
   }
   rl.close();
+  mcp.close();
   if (session && session.meta.status === "running") { session.meta.status = "interrupted"; await session.save(); }
 }
 
