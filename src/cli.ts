@@ -9,6 +9,7 @@ import { runAgent, type AgentEvent } from "./agent.js";
 import { compact } from "./context.js";
 import { evalMain } from "./eval/main.js";
 import { MarkdownStream, renderMarkdown } from "./markdown.js";
+import { isModelHotkey, pickFromList } from "./picker.js";
 
 const c = {
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
@@ -40,7 +41,7 @@ Options:
 Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
 In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  exit (or /exit, Ctrl+D)
-  /model with no argument lists the endpoint's models to pick from.`;
+  Option+M (or /model) opens the model picker: ↑/↓ to move, Enter to select, Esc to cancel.`;
 
 function parseArgs(argv: string[]) {
   const a: Record<string, string | boolean> = {};
@@ -78,17 +79,15 @@ function defaultModel(models: string[]): string {
 }
 
 /** Numbered picker. Enter keeps `current`; returns undefined on an invalid choice. */
-async function chooseModel(rl: Interface, models: string[], current: string): Promise<string | undefined> {
+/** Arrow-key model picker. Resolves to the chosen model, or `current` if cancelled. */
+async function chooseModel(models: string[], current: string): Promise<string> {
   const w = Math.max(...models.map((m) => m.length));
-  models.forEach((m, i) => {
+  const labels = models.map((m, i) => {
     const s = modelSpec(m);
-    const ctx = s.known ? `${s.contextWindow / 1000}k` : "?";
-    const line = `${m === current ? "*" : " "} ${String(i + 1).padStart(2)}  ${m.padEnd(w)}  ${ctx}`;
-    console.log(m === current ? c.cyan(line) : line);
+    return `${String(i + 1).padStart(2)}  ${m.padEnd(w)}  ${s.known ? `${s.contextWindow / 1000}k` : "?"}${m === current ? "  (current)" : ""}`;
   });
-  const ans = (await rl.question(c.dim(`model [1-${models.length}, Enter keeps ${current}]: `))).trim();
-  if (!ans) return current;
-  return resolveModel(ans, models);
+  const picked = await pickFromList("Select a model", labels, Math.max(0, models.indexOf(current)));
+  return picked === undefined ? current : models[picked];
 }
 
 function renderer(showReasoning: boolean) {
@@ -100,6 +99,7 @@ function renderer(showReasoning: boolean) {
   let md = new MarkdownStream(stdout.columns || 80);
   // Spinner while the model is working: elapsed time, hidden reasoning progress, silence and retries.
   let spin: { timer: ReturnType<typeof setInterval>; start: number; model: string; reasoning: number; lastData: number; retry?: string } | undefined;
+  let note: string | undefined; // shown in the spinner until the task ends (e.g. a queued model picker)
   const drawSpin = () => {
     if (!spin) return;
     const now = Date.now();
@@ -109,6 +109,7 @@ function renderer(showReasoning: boolean) {
     const quiet = Math.floor((now - spin.lastData) / 1000);
     if (quiet >= 15) parts.push(spin.reasoning ? `no new tokens for ${quiet}s` : "waiting for the model");
     if (spin.retry) parts.push(spin.retry);
+    if (note) parts.push(note);
     const text = `${frame} ${parts.join(" · ")}`.slice(0, (stdout.columns || 80) - 1);
     stdout.write(`\r\x1b[2K${c.cyan(text.slice(0, 1))}${c.dim(text.slice(1))}`);
   };
@@ -123,7 +124,7 @@ function renderer(showReasoning: boolean) {
     else if (lineKind) stdout.write("\n");
     lineKind = undefined;
   };
-  return (e: AgentEvent) => {
+  const handle = (e: AgentEvent) => {
     if (e.type === "llm_retry") {
       if (spin) spin.retry = `retry ${e.attempt} (${e.reason}${e.status ? ` ${e.status}` : ""})`;
       return;
@@ -165,9 +166,13 @@ function renderer(showReasoning: boolean) {
         break;
       }
       case "compaction": console.log(c.yellow("↻ context compacted")); break;
-      case "done": if (e.status !== "done") console.log(c.yellow(`stopped: ${e.status}`)); break;
+      case "done":
+        note = undefined;
+        if (e.status !== "done") console.log(c.yellow(`stopped: ${e.status}`));
+        break;
     }
   };
+  return Object.assign(handle, { notice: (text: string) => { note = text; } });
 }
 
 async function main() {
@@ -206,7 +211,7 @@ async function main() {
   if (!cfg.model) {
     const models = await chatModels(cfg);
     cfg.model = defaultModel(models);
-    if (rl && typeof args.prompt !== "string") cfg.model = (await chooseModel(rl, models, cfg.model)) ?? cfg.model;
+    if (rl && typeof args.prompt !== "string") cfg.model = await chooseModel(models, cfg.model);
   }
   // The summary model follows the main model unless ARCODE_SUMMARY_MODEL pins it.
   const pinnedSummary = Boolean(process.env.ARCODE_SUMMARY_MODEL);
@@ -256,12 +261,38 @@ async function main() {
   }
   if (!rl) throw new Error("no TTY: use -p \"task\" for headless runs");
 
-  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · /help · exit to quit`));
+  console.log(c.bold("arcode") + c.dim(` · ${cfg.model} · ${cfg.workdir} · ⌥M model · /help · exit to quit`));
   let closed = false;
   rl.on("close", () => { closed = true; });
+
+  // Option+M opens the model picker: at the prompt right away, during a task once it finishes.
+  const openPicker = async () => {
+    const models = await chatModels(cfg).catch(() => [] as string[]);
+    if (!models.length) return console.log(c.yellow("could not list models; use /model <id>"));
+    const picked = await chooseModel(models, cfg.model);
+    if (picked !== cfg.model) setModel(picked);
+    else console.log(c.dim(`model: ${cfg.model}`));
+  };
+  let promptAbort: AbortController | undefined;
+  let busy = false, pickerQueued = false;
+  stdin.on("keypress", (str: string | undefined, key: any) => {
+    if (!isModelHotkey(str, key)) return;
+    if (!busy) promptAbort?.abort();
+    else if (!pickerQueued) { pickerQueued = true; onEvent.notice("model picker opens after this task (⌥M)"); }
+  });
+
   while (!closed) {
+    if (pickerQueued) { pickerQueued = false; await openPicker(); }
+    promptAbort = new AbortController();
     let line: string;
-    try { line = (await rl.question(c.bold("› "))).trim(); } catch { break; }
+    try {
+      line = (await rl.question(c.bold("› "), { signal: promptAbort.signal })).trim();
+    } catch {
+      if (closed || !promptAbort.signal.aborted) break;
+      stdout.write("\r\x1b[2K"); // drop the half-typed prompt line
+      await openPicker();
+      continue;
+    }
     if (!line) continue;
     if (/^(exit|quit)$/i.test(line)) break; // bare words, like a shell; /exit works too
     if (line.startsWith("/")) {
@@ -273,7 +304,7 @@ async function main() {
       else if (cmd === "session") console.log(session ? `${session.dir}\n${JSON.stringify(session.meta, null, 2)}` : "(no session yet)");
       else if (cmd === "model") {
         const models = await chatModels(cfg).catch(() => [] as string[]);
-        const picked = rest[0] ? (models.length ? resolveModel(rest[0], models) : rest[0]) : models.length ? await chooseModel(rl, models, cfg.model) : undefined;
+        const picked = rest[0] ? (models.length ? resolveModel(rest[0], models) : rest[0]) : models.length ? await chooseModel(models, cfg.model) : undefined;
         if (picked && picked !== cfg.model) setModel(picked);
         else if (!picked) console.log(c.yellow(`not a listed model${rest[0] ? `: ${rest[0]}` : ""}; /model shows the list`));
         else console.log(c.dim(`model: ${cfg.model}`));
@@ -285,7 +316,9 @@ async function main() {
       } else console.log(`unknown command /${cmd}`);
       continue;
     }
+    busy = true;
     await run(line);
+    busy = false;
   }
   rl.close();
   if (session && session.meta.status === "running") { session.meta.status = "interrupted"; await session.save(); }

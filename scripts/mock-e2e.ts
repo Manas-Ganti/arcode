@@ -13,6 +13,7 @@ import { Session } from "../src/session.js";
 import { LLM } from "../src/llm.js";
 import { MarkdownStream, renderMarkdown } from "../src/markdown.js";
 import { runCommand } from "../src/tools/shell.js";
+import { isModelHotkey, pickerStep } from "../src/picker.js";
 import { runAgent } from "../src/agent.js";
 
 let n = 0;
@@ -159,6 +160,13 @@ const alwaysApprove = async () => { prompts++; alwaysCfg.autoApprove = true; ret
 await runAgent("write two files", { config: alwaysCfg, session: await Session.create(data, alwaysWork, "mock", "t"), approve: alwaysApprove });
 alwaysServer.close();
 checks.push(["'a' (always allow) applies to the rest of the running task", prompts === 1 && (await readFile(join(alwaysWork, "b.txt"), "utf8")) === "b"]);
+
+// Arrow-key picker and the Option+M hotkey.
+const step = (i: number, str: string | undefined, key: object | undefined) => JSON.stringify(pickerStep(i, 4, str, key as any));
+checks.push(["picker: arrows move and wrap", step(0, undefined, { name: "down" }) === '{"index":1}' && step(0, undefined, { name: "up" }) === '{"index":3}' && step(3, undefined, { name: "down" }) === '{"index":0}']);
+checks.push(["picker: Enter selects, digit jumps", step(2, "\r", { name: "return" }) === '{"done":2}' && step(0, "3", { name: "3" }) === '{"done":2}' && step(0, "9", { name: "9" }) === '{"index":0}']);
+checks.push(["picker: Esc and Ctrl+C cancel", step(1, undefined, { name: "escape" }) === '{"cancel":true}' && step(1, "\u0003", { name: "c", ctrl: true }) === '{"cancel":true}']);
+checks.push(["Option+M detected in both terminal modes", isModelHotkey("µ", undefined) && !!isModelHotkey("\u001bm", { name: "m", meta: true }) && !isModelHotkey("m", { name: "m" })]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;

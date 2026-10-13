@@ -42,7 +42,7 @@ Replies stream token by token and their markdown (bold, code, headings, lists, c
 
 While the model works, a spinner shows elapsed time and how much hidden reasoning has streamed, and says so when no tokens are arriving or a request is being retried. At an approval prompt, `a` auto-approves edits and commands for the rest of the session, including the task already running.
 
-REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, and `exit` (or `/exit`, Ctrl+D) to quit. With no model configured, interactive mode opens a numbered model picker (Enter takes the default GLM). `/model` reopens it mid-session; `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. One key covers every model, and the compaction model and context budget follow the switch.
+REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, and `exit` (or `/exit`, Ctrl+D) to quit. With no model configured, interactive mode opens a model picker (↑/↓ to move, Enter to select, Esc keeps the default). Press **Option+M** (or type `/model`) to reopen it mid-session; pressed while the agent is working, it opens when the current task finishes. `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. (Cmd+M can't be used: macOS terminals keep Cmd shortcuts for themselves.) One key covers every model, and the compaction model and context budget follow the switch.
 
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
 
