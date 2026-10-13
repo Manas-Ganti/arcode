@@ -1,0 +1,21 @@
+{
+  "name": "arcode",
+  "version": "0.1.0",
+  "description": "Minimal, research-grade coding agent harness for OpenAI-compatible endpoints (VT ARC: GLM, DeepSeek). Logs every run as RL-ready trajectories.",
+  "type": "module",
+  "bin": { "arcode": "./dist/cli.js" },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "probe": "tsx scripts/probe-arc.ts",
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "test:mock": "tsx scripts/mock-e2e.ts"
+  },
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
