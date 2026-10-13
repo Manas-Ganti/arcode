@@ -14,6 +14,8 @@ import { LLM } from "../src/llm.js";
 import { MarkdownStream, renderMarkdown } from "../src/markdown.js";
 import { runCommand } from "../src/tools/shell.js";
 import { isModelHotkey, pickerStep } from "../src/picker.js";
+import { expandCommand, loadCommands, parseSlash, shellContext } from "../src/commands.js";
+import { mkdir, writeFile } from "node:fs/promises";
 import { runAgent } from "../src/agent.js";
 
 let n = 0;
@@ -168,6 +170,24 @@ checks.push(["picker: Enter selects, digit jumps", step(2, "\r", { name: "return
 checks.push(["picker: Esc and Ctrl+C cancel", step(1, undefined, { name: "escape" }) === '{"cancel":true}' && step(1, "\u0003", { name: "c", ctrl: true }) === '{"cancel":true}']);
 checks.push(["hotkey: Ctrl+O, and Option+M in both terminal modes", !!isModelHotkey("\u000f", { name: "o", ctrl: true }) && isModelHotkey("µ", undefined) && !!isModelHotkey("\u001bm", { name: "m", meta: true })]);
 checks.push(["hotkey: plain M, Shift+M and o are just text", !isModelHotkey("m", { name: "m" }) && !isModelHotkey("M", { name: "m", shift: true } as any) && !isModelHotkey("o", { name: "o" })]);
+
+// Custom commands: user + project files, project wins, built-ins can't be shadowed.
+const cmdHome = await mkdtemp(join(tmpdir(), "arcode-cmdhome-"));
+const cmdProj = await mkdtemp(join(tmpdir(), "arcode-cmdproj-"));
+await mkdir(join(cmdHome, "commands"), { recursive: true });
+await mkdir(join(cmdProj, ".arcode", "commands"), { recursive: true });
+await writeFile(join(cmdHome, "commands", "review.md"), "---\ndescription: Review a file for bugs\n---\nReview $ARGUMENTS for bugs. Don't edit.\n");
+await writeFile(join(cmdHome, "commands", "fix.md"), "user version");
+await writeFile(join(cmdProj, ".arcode", "commands", "fix.md"), "# Fix the failing tests\nRun the tests and fix failures.");
+await writeFile(join(cmdProj, ".arcode", "commands", "help.md"), "should be ignored");
+const cmds = await loadCommands(cmdProj, cmdHome);
+checks.push(["commands: loaded from user and project dirs", cmds.has("review") && cmds.has("fix") && cmds.get("review")!.scope === "user"]);
+checks.push(["commands: project file wins a name clash", cmds.get("fix")!.scope === "project" && cmds.get("fix")!.body.includes("Run the tests")]);
+checks.push(["commands: built-in names can't be shadowed", !cmds.has("help")]);
+checks.push(["commands: description from frontmatter or first line", cmds.get("review")!.description === "Review a file for bugs" && cmds.get("fix")!.description === "Fix the failing tests"]);
+checks.push(["commands: $ARGUMENTS replaced, else appended", expandCommand(cmds.get("review")!.body, "src/llm.ts") === "Review src/llm.ts for bugs. Don't edit." && expandCommand("Do it.", "now") === "Do it.\n\nArguments: now" && expandCommand("Do it.", "") === "Do it."]);
+checks.push(["commands: slash parsing", JSON.stringify(parseSlash("/Review  a b")) === '{"name":"review","args":"a b"}' && parseSlash("not /a command") === undefined && parseSlash("/") === undefined]);
+checks.push(["!command output is framed for the model", shellContext("git status", "clean\n", 0) === "<user_shell_command>\n$ git status\nclean\n[exit code 0]\n</user_shell_command>"]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;

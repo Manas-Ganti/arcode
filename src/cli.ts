@@ -10,6 +10,10 @@ import { compact } from "./context.js";
 import { evalMain } from "./eval/main.js";
 import { MarkdownStream, renderMarkdown } from "./markdown.js";
 import { isModelHotkey, pickFromList } from "./picker.js";
+import { expandCommand, loadCommands, parseSlash, shellContext } from "./commands.js";
+import { runCommand } from "./tools/shell.js";
+import { truncate } from "./tools/types.js";
+import { homedir } from "node:os";
 
 const c = {
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
@@ -40,7 +44,9 @@ Options:
 
 Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
-In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /help  exit (or /exit, Ctrl+D)
+In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /commands  /help  exit (or /exit, Ctrl+D)
+  !<command>   run a shell command directly; its output goes to the model with your next message
+  /<name> args run a saved prompt from .arcode/commands/<name>.md or ~/.arcode/commands/<name>.md
   Ctrl+O (or /model) opens the model picker: ↑/↓ to move, Enter to select, Esc to cancel.`;
 
 function parseArgs(argv: string[]) {
@@ -238,8 +244,12 @@ async function main() {
   };
   const onEvent = renderer(Boolean(args.reasoning));
 
-  const run = async (input: string) => {
-    session ??= await Session.create(cfg.dataDir, cfg.workdir, cfg.model, input);
+  // Output of `!command` lines, sent to the model with the next message.
+  let pendingShell: string[] = [];
+  const run = async (typed: string) => {
+    const input = pendingShell.length ? `${pendingShell.join("\n\n")}\n\n${typed}` : typed;
+    pendingShell = [];
+    session ??= await Session.create(cfg.dataDir, cfg.workdir, cfg.model, typed);
     try {
       await runAgent(input, { config: cfg, session, approve, onEvent });
     } catch (e: any) {
@@ -253,8 +263,19 @@ async function main() {
     console.log(c.dim(`[${session.meta.model} · turns ${session.meta.turns} · tokens ${u.prompt}+${u.completion} · ${session.meta.id}]`));
   };
 
+  /** A saved /command → its expanded prompt; undefined if there's no such command file. */
+  const customPrompt = async (line: string) => {
+    const slash = parseSlash(line);
+    const cmd = slash && (await loadCommands(cfg.workdir, cfg.dataDir)).get(slash.name);
+    if (!slash || !cmd) return undefined;
+    console.log(c.dim(`→ /${cmd.name} (${cmd.path.replace(homedir(), "~")})`));
+    return expandCommand(cmd.body, slash.args);
+  };
+
   if (typeof args.prompt === "string") {
-    await run(args.prompt);
+    const custom = args.prompt.startsWith("/") ? await customPrompt(args.prompt) : undefined;
+    if (args.prompt.startsWith("/") && !custom) throw new Error(`no command file for ${args.prompt.split(/\s/)[0]} (see /commands in the REPL)`);
+    await run(custom ?? args.prompt);
     rl?.close();
     process.exitCode = session?.meta.status === "done" ? 0 : 1;
     return;
@@ -295,6 +316,21 @@ async function main() {
     }
     if (!line) continue;
     if (/^(exit|quit)$/i.test(line)) break; // bare words, like a shell; /exit works too
+    if (line.startsWith("!")) {
+      // Runs directly (you typed it, so no approval); the output goes to the model with your next message.
+      const command = line.slice(1).trim();
+      if (!command) { console.log(c.dim("usage: !<shell command>, e.g. !git status")); continue; }
+      busy = true;
+      const r = await runCommand(command, cfg.workdir, 120_000);
+      busy = false;
+      const out = r.out.trimEnd();
+      const lines = out.split("\n");
+      console.log(lines.length > 200 ? `${c.dim(`[… ${lines.length - 200} earlier lines]`)}\n${lines.slice(-200).join("\n")}` : out);
+      console.log(c.dim(`[${r.timedOut ? "timed out after 120s" : `exit code ${r.code}`} · output will be included with your next message]`));
+      pendingShell.push(shellContext(command, truncate(out, 20_000), r.code));
+      continue;
+    }
+    let input = line;
     if (line.startsWith("/")) {
       const [cmd, ...rest] = line.slice(1).split(/\s+/);
       if (cmd === "exit" || cmd === "quit") break;
@@ -309,15 +345,25 @@ async function main() {
         else if (!picked) console.log(c.yellow(`not a listed model${rest[0] ? `: ${rest[0]}` : ""}; /model shows the list`));
         else console.log(c.dim(`model: ${cfg.model}`));
       }
-      else if (cmd === "compact" && session) {
-        const did = await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody, cfg.requestTimeoutS * 1000), model: cfg.summaryModel, session });
-        await session.save();
+      else if (cmd === "compact") {
+        const did = session && await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody, cfg.requestTimeoutS * 1000), model: cfg.summaryModel, session });
+        if (session) await session.save();
         console.log(did ? "compacted" : "nothing to compact");
-      } else console.log(`unknown command /${cmd}`);
-      continue;
+      }
+      else if (cmd === "commands") {
+        const all = [...(await loadCommands(cfg.workdir, cfg.dataDir)).values()];
+        if (!all.length) console.log(c.dim("no custom commands. Add markdown files to .arcode/commands/ (this project) or ~/.arcode/commands/ (everywhere)."));
+        for (const k of all) console.log(`/${k.name.padEnd(18)} ${k.description} ${c.dim(`(${k.scope})`)}`);
+      }
+      else {
+        const custom = await customPrompt(line);
+        if (!custom) { console.log(`unknown command /${cmd} (see /help and /commands)`); continue; }
+        input = custom;
+      }
+      if (input === line) continue;
     }
     busy = true;
-    await run(line);
+    await run(input);
     busy = false;
   }
   rl.close();

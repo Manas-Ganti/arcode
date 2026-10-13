@@ -44,6 +44,19 @@ While the model works, a spinner shows elapsed time and how much hidden reasonin
 
 REPL commands: `/plan`, `/notes`, `/compact`, `/model`, `/session`, and `exit` (or `/exit`, Ctrl+D) to quit. With no model configured, interactive mode opens a model picker (↑/↓ to move, Enter to select, Esc keeps the default). Press **Ctrl+O** (or type `/model`) to reopen it mid-session; pressed while the agent is working, it opens when the current task finishes. `/model 3` or `/model DeepSeek-V4.1-Flash` switches directly. Option+M also works in terminals that pass it through. (Cmd+M and Shift+M can't be used: the terminal keeps Cmd shortcuts, and Shift+M is just a capital M.) One key covers every model, and the compaction model and context budget follow the switch.
 
+### Shell commands and custom commands
+
+- `!<command>` runs a shell command directly (no model, no approval prompt), e.g. `!git status` or `!pytest -x`. Its output is shown and also sent to the model with your next message.
+- `/<name> [args]` runs a saved prompt from a markdown file: `.arcode/commands/<name>.md` in the project, or `~/.arcode/commands/<name>.md` for every project (the project file wins on a name clash; built-in commands can't be overridden). `$ARGUMENTS` in the file is replaced by what you type after the name; if the file doesn't use it, the arguments are appended. `/commands` lists them. Also works headless: `arcode -p "/review src/llm.ts"`.
+
+```markdown
+<!-- ~/.arcode/commands/review.md -->
+---
+description: Review a file for bugs without editing it
+---
+Review $ARGUMENTS for bugs. Run the tests first. Report findings as a list; don't edit files.
+```
+
 Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the repo root, and it's added to the system prompt.
 
 ## Configuration

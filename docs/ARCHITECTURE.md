@@ -11,6 +11,8 @@ src/
   llm.ts        OpenAI-compatible client (raw fetch, SSE streaming, retries/backoff on 429/5xx)
   context.ts    token estimate + compaction (summarize middle, keep head/tail)
   session.ts    on-disk session: messages, trajectory, todos, notes
+  commands.ts   custom /commands (markdown prompt files) and `!shell` context framing
+  picker.ts     arrow-key list picker (model selection, Ctrl+O)
   markdown.ts   markdown → ANSI styling for terminal replies (line-based, stream-aware)
   config.ts     env-driven config (+ $ARCODE_HOME/.env)
   models.ts     per-model context window and request params, matched by id prefix
