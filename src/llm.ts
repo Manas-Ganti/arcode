@@ -30,6 +30,9 @@ export interface ChatResult {
   latencyMs: number;
 }
 
+/** One streamed fragment of the assistant message. */
+export type Delta = { content: string } | { reasoning: string };
+
 export class LLMError extends Error {
   constructor(message: string, public status?: number, public body?: string) {
     super(message);
@@ -56,6 +59,8 @@ export class LLM {
     temperature?: number;
     maxTokens?: number;
     signal?: AbortSignal;
+    /** If set, the request streams (SSE) and fragments arrive here as they are generated. */
+    onDelta?: (d: Delta) => void;
   }): Promise<ChatResult> {
     const body: Record<string, unknown> = {
       ...modelSpec(opts.model).params,
@@ -68,6 +73,10 @@ export class LLM {
     if (opts.tools?.length) {
       body.tools = opts.tools;
       body.tool_choice = "auto";
+    }
+    if (opts.onDelta) {
+      body.stream = true;
+      body.stream_options = { include_usage: true };
     }
 
     // ARC rate limits are ~60 req/min, so back off on 429 and transient 5xx.
@@ -96,10 +105,17 @@ export class LLM {
       }
       if (!res.ok) throw new LLMError(`chat failed: ${res.status}`, res.status, await res.text());
 
-      const json = (await res.json()) as any;
-      const choice = json.choices?.[0];
-      if (!choice) throw new LLMError("no choices in response", res.status, JSON.stringify(json).slice(0, 2000));
-      const m = choice.message ?? {};
+      let m: any, finishReason: string | undefined, usage: ChatResult["usage"];
+      if (opts.onDelta) {
+        ({ m, finishReason, usage } = await readStream(res, opts.onDelta));
+      } else {
+        const json = (await res.json()) as any;
+        const choice = json.choices?.[0];
+        if (!choice) throw new LLMError("no choices in response", res.status, JSON.stringify(json).slice(0, 2000));
+        m = choice.message ?? {};
+        finishReason = choice.finish_reason;
+        usage = json.usage;
+      }
       // DeepSeek-style servers use `reasoning_content`; vLLM-style (incl. VT ARC) use `reasoning`.
       const reasoning = m.reasoning_content || m.reasoning;
       const message: ChatResult["message"] = {
@@ -108,9 +124,56 @@ export class LLM {
         ...(m.tool_calls?.length ? { tool_calls: normalizeToolCalls(m.tool_calls) } : {}),
         ...(reasoning ? { reasoning_content: reasoning } : {}),
       };
-      return { message, finishReason: choice.finish_reason ?? "unknown", usage: json.usage, latencyMs: Date.now() - t0 };
+      return { message, finishReason: finishReason ?? "unknown", usage, latencyMs: Date.now() - t0 };
     }
   }
+}
+
+/**
+ * Assemble an SSE chat stream into the same shape as a non-streamed `message`.
+ * Tool calls arrive as fragments keyed by `index`; their arguments are concatenated.
+ */
+async function readStream(res: Response, onDelta: (d: Delta) => void) {
+  const m = { content: "", reasoning: "", tool_calls: [] as any[] };
+  let finishReason: string | undefined;
+  let usage: ChatResult["usage"];
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") continue;
+      const j = JSON.parse(data);
+      if (j.error) throw new LLMError("stream error", res.status, JSON.stringify(j.error).slice(0, 2000));
+      if (j.usage) usage = j.usage;
+      const ch = j.choices?.[0];
+      if (!ch) continue;
+      if (ch.finish_reason) finishReason = ch.finish_reason;
+      const d = ch.delta ?? {};
+      const r = d.reasoning_content || d.reasoning;
+      if (r) { m.reasoning += r; onDelta({ reasoning: r }); }
+      if (d.content) { m.content += d.content; onDelta({ content: d.content }); }
+      for (const tc of d.tool_calls ?? []) {
+        const slot = (m.tool_calls[tc.index ?? 0] ??= { id: "", function: { name: "", arguments: "" } });
+        if (tc.id) slot.id = tc.id;
+        if (tc.function?.name && !slot.function.name) slot.function.name = tc.function.name;
+        if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+      }
+    }
+  }
+  return {
+    m: { content: m.content || null, reasoning: m.reasoning, tool_calls: m.tool_calls.filter(Boolean) },
+    finishReason,
+    usage,
+  };
 }
 
 function normalizeToolCalls(calls: any[]): ToolCall[] {

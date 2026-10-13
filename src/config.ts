@@ -10,6 +10,8 @@ export interface Config {
   summaryModel: string;
   /** Approximate token budget before compaction kicks in. 0 = derive from the model (see models.ts). */
   contextBudget: number;
+  /** Stream agent turns (SSE). Off with ARCODE_STREAM=0. */
+  stream: boolean;
   /** Extra JSON merged into every chat request (ARCODE_EXTRA_BODY), e.g. reasoning_effort. */
   extraBody: Record<string, unknown>;
   maxTurns: number;
@@ -37,6 +39,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     summaryModel: env.ARCODE_SUMMARY_MODEL ?? env.ARCODE_MODEL ?? "",
     contextBudget: Number(env.ARCODE_CONTEXT_BUDGET ?? 0),
     extraBody: parseExtraBody(env.ARCODE_EXTRA_BODY),
+    stream: env.ARCODE_STREAM !== "0",
     maxTurns: Number(env.ARCODE_MAX_TURNS ?? 60),
     autoApprove: env.ARCODE_YES === "1",
     workdir: process.cwd(),

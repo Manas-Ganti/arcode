@@ -8,7 +8,7 @@ arcode is a small coding-agent harness: one loop you can read in a sitting, tool
 src/
   cli.ts        REPL + headless (-p) entry, approvals, rendering, resume
   agent.ts      the loop: build prompt → call model → run tools → repeat
-  llm.ts        OpenAI-compatible client (raw fetch, retries/backoff on 429/5xx)
+  llm.ts        OpenAI-compatible client (raw fetch, SSE streaming, retries/backoff on 429/5xx)
   context.ts    token estimate + compaction (summarize middle, keep head/tail)
   session.ts    on-disk session: messages, trajectory, todos, notes
   config.ts     env-driven config (+ $ARCODE_HOME/.env)
@@ -70,7 +70,7 @@ The trajectory format is the research hook. Every run, interactive or benchmark,
 Ordered by expected impact on usefulness and on research value.
 
 **Usability**
-1. Streaming responses (SSE) so long generations aren't silent.
+1. ~~Streaming responses (SSE) so long generations aren't silent.~~ Done: agent turns stream (also avoids ARC's 8000 max_tokens cap on non-streamed requests); compaction stays non-streamed.
 2. Repo map: a tree-sitter or ctags symbol index injected at session start, so the model doesn't spend turns on `list_dir`.
 3. Diff preview on edit approvals, plus `git` checkpoint/undo per task.
 4. Ink-based TUI (status bar with model, tokens, plan) once the core stabilizes.

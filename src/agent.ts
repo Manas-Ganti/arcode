@@ -11,6 +11,9 @@ import { defaultContextBudget } from "./models.js";
 export type AgentEvent =
   | { type: "assistant_text"; text: string }
   | { type: "reasoning"; text: string }
+  | { type: "llm_start"; model: string }
+  /** Streamed fragment; `assistant_text`/`reasoning` still follow with the full text. */
+  | { type: "delta"; kind: "content" | "reasoning"; text: string }
   | { type: "tool_start"; name: string; args: any }
   | { type: "tool_end"; name: string; result: string; ms: number }
   | { type: "compaction" }
@@ -72,7 +75,15 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
       if (await compact({ llm, model: config.summaryModel, session })) onEvent({ type: "compaction" });
     }
 
-    const res = await llm.chat({ model: config.model, messages: session.messages, tools: specs });
+    onEvent({ type: "llm_start", model: config.model });
+    const res = await llm.chat({
+      model: config.model,
+      messages: session.messages,
+      tools: specs,
+      onDelta: config.stream
+        ? (d) => onEvent("content" in d ? { type: "delta", kind: "content", text: d.content } : { type: "delta", kind: "reasoning", text: d.reasoning })
+        : undefined,
+    });
     let msg = res.message;
     if (!msg.tool_calls?.length && msg.content) msg = recoverTextToolCalls(msg, byName);
 

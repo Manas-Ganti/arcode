@@ -50,6 +50,7 @@ Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the r
 | `ARCODE_MODEL` | first GLM model listed, then DeepSeek |
 | `ARCODE_SUMMARY_MODEL` | same as model |
 | `ARCODE_CONTEXT_BUDGET` | 75% of the model's context window (`src/models.ts`), in estimated tokens before compaction |
+| `ARCODE_STREAM` | `1`. Agent turns stream token by token; `0` waits for whole replies |
 | `ARCODE_EXTRA_BODY` | none. JSON merged into every request, e.g. `{"reasoning_effort":"high"}` or `{"chat_template_kwargs":{"enable_thinking":false}}` |
 | `ARCODE_MAX_TURNS` | `60` |
 | `ARCODE_HOME` | `~/.arcode` |

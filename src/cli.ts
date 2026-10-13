@@ -87,10 +87,31 @@ async function chooseModel(rl: Interface, models: string[], current: string): Pr
 }
 
 function renderer(showReasoning: boolean) {
+  // Per model call: what was already streamed, so the full-text events don't repeat it.
+  let streamed = { content: false, reasoning: false };
+  let lineKind: "content" | "reasoning" | "status" | undefined; // what the cursor is in the middle of
+  const endLine = () => {
+    if (lineKind === "status") stdout.write("\r\x1b[2K");
+    else if (lineKind) stdout.write("\n");
+    lineKind = undefined;
+  };
   return (e: AgentEvent) => {
+    if (e.type === "delta") {
+      if (e.kind === "reasoning" && !showReasoning) return; // keep the "thinking…" line up
+      if (lineKind !== e.kind) endLine();
+      stdout.write(e.kind === "reasoning" ? c.dim(e.text) : e.text);
+      streamed[e.kind] = true;
+      lineKind = e.kind;
+      return;
+    }
+    endLine();
     switch (e.type) {
-      case "reasoning": if (showReasoning) console.log(c.dim(e.text.trim())); break;
-      case "assistant_text": console.log(e.text.trim()); break;
+      case "llm_start":
+        streamed = { content: false, reasoning: false };
+        if (stdout.isTTY) { stdout.write(c.dim(`thinking… (${e.model})`)); lineKind = "status"; }
+        break;
+      case "reasoning": if (showReasoning && !streamed.reasoning) console.log(c.dim(e.text.trim())); break;
+      case "assistant_text": if (!streamed.content) console.log(e.text.trim()); break;
       case "tool_start": {
         const arg = e.args.command ?? e.args.path ?? e.args.query ?? e.args.url ?? e.args.pattern ?? "";
         console.log(c.cyan(`● ${e.name}`) + (arg ? c.dim(` ${String(arg).slice(0, 120)}`) : ""));
@@ -159,7 +180,7 @@ async function main() {
   };
   const approve = async (summary: string) => {
     if (!rl) return false; // headless without --yes: deny side effects
-    const ans = (await rl.question(c.yellow(`allow ${summary}? [y/N/a=always] `))).trim().toLowerCase();
+    const ans = (await rl.question(c.yellow(`allow ${summary}? [y/N/a=always] `)).catch(() => "")).trim().toLowerCase(); // closed stdin = deny
     if (ans === "a") { cfg.autoApprove = true; return true; }
     return ans === "y" || ans === "yes";
   };

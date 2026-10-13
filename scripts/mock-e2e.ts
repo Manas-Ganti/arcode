@@ -38,6 +38,7 @@ const server = createServer(async (req, res) => {
   // Compaction requests have no tools attached.
   if (!j.tools) return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "SUMMARY: created hello.txt" }, finish_reason: "stop" }] }));
   const msg = script[i++] ?? { content: "done" };
+  if (j.stream) return streamSSE(res, msg);
   res.end(JSON.stringify({ choices: [{ message: { role: "assistant", ...msg }, finish_reason: msg.tool_calls ? "tool_calls" : "stop" }], usage: { prompt_tokens: 100, completion_tokens: 20 } }));
 });
 await new Promise<void>((r) => server.listen(0, r));
@@ -48,7 +49,11 @@ const data = await mkdtemp(join(tmpdir(), "arcode-data-"));
 const cfg = loadConfig({ baseUrl: `http://127.0.0.1:${port}/v1`, apiKey: "x", model: "mock-glm", summaryModel: "mock-glm", workdir: work, dataDir: data, autoApprove: true, contextBudget: 400, extraBody: { reasoning_effort: "low" } });
 const session = await Session.create(data, work, cfg.model, "create hello.txt");
 const events: string[] = [];
-const final = await runAgent("create hello.txt", { config: cfg, session, approve: async () => true, onEvent: (e) => events.push(e.type) });
+let streamedText = "";
+const final = await runAgent("create hello.txt", {
+  config: cfg, session, approve: async () => true,
+  onEvent: (e) => { events.push(e.type); if (e.type === "llm_start") streamedText = ""; if (e.type === "delta" && e.kind === "content") streamedText += e.text; },
+});
 server.close();
 
 const checks: [string, boolean][] = [];
@@ -69,6 +74,8 @@ checks.push(["tool results stay paired after compaction", pairedOk(session.messa
 checks.push(["session resumable", (await Session.load(data, session.meta.id)).messages.length === session.messages.length]);
 checks.push(["status done", session.meta.status === "done"]);
 
+checks.push(["agent turns streamed, compaction not", requests.filter((r) => r.tools).every((r) => r.stream) && requests.filter((r) => r.messages && !r.tools).every((r) => !r.stream)]);
+checks.push(["streamed deltas reassemble the final answer", streamedText === final && events.includes("llm_start")]);
 checks.push(["extra body sent on every request (incl. compaction)", requests.filter((r) => r.messages).every((r) => r.reasoning_effort === "low")]);
 
 // Model registry: ARC variant ids share their base entry; unknown ids fall back.
@@ -100,4 +107,27 @@ function pairedOk(msgs: any[]): boolean {
     if (m.role === "tool" && !called.has(m.tool_call_id)) return false;
   }
   return true;
+}
+
+/** Send a scripted message as OpenAI-style SSE: text in small pieces, tool-call arguments split across chunks. */
+function streamSSE(res: import("node:http").ServerResponse, msg: any) {
+  res.setHeader("Content-Type", "text/event-stream");
+  const send = (delta: object, extra: object = {}) => res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, ...extra }] })}\n\n`);
+  const reasoning = msg.reasoning ?? msg.reasoning_content;
+  if (reasoning) for (const part of chunks(reasoning)) send({ reasoning: part });
+  if (msg.content) for (const part of chunks(msg.content)) send({ content: part });
+  (msg.tool_calls ?? []).forEach((tc: any, index: number) => {
+    const [a, b] = [tc.function.arguments.slice(0, 7), tc.function.arguments.slice(7)];
+    send({ tool_calls: [{ index, id: tc.id, type: "function", function: { name: tc.function.name, arguments: a } }] });
+    send({ tool_calls: [{ index, function: { arguments: b } }] });
+  });
+  send({}, { finish_reason: msg.tool_calls ? "tool_calls" : "stop" });
+  res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 20 } })}\n\n`);
+  res.end("data: [DONE]\n\n");
+}
+
+function chunks(s: string, n = 5): string[] {
+  const out: string[] = [];
+  for (let k = 0; k < s.length; k += n) out.push(s.slice(k, k + n));
+  return out;
 }
