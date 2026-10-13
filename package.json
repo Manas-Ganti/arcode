@@ -9,7 +9,7 @@
     "probe": "tsx scripts/probe-arc.ts",
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test:mock": "tsx scripts/mock-e2e.ts"
+    "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts"
   },
   "license": "MIT",
   "engines": { "node": ">=20" },

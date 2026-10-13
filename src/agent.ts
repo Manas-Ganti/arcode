@@ -44,9 +44,8 @@ How to work:
 - For anything beyond a one-step change, call todo_write first with a short plan, and keep it updated.
 - Explore before editing: list_dir / grep / read_file. Never guess file contents.
 - Edit with edit_file (exact string replacement). Use write_file only for new files.
-- After changes, verify: run the tests, type-checker, or the program with bash. Fix what fails.
-- Use web_search + web_fetch when unsure about a library API, an error, or anything version-specific.
-- Save durable facts (decisions, key paths, working commands) with note; they survive context compaction.
+- After changes, verify with run_tests (and bash for type-checkers, builds, or running the program). Fix what fails, and run the tests again before you finish.
+${tools.some((t) => t.name === "web_search") ? "- Use web_search + web_fetch when unsure about a library API, an error, or anything version-specific.\n" : ""}- Save durable facts (decisions, key paths, working commands) with note; they survive context compaction.
 - Keep messages short. When the task is complete, reply with a brief summary of what changed and how you verified it, and make no further tool calls.${project}`;
 }
 
@@ -55,7 +54,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
   const tools = opts.tools ?? ALL_TOOLS;
   const byName = new Map(tools.map((t) => [t.name, t]));
   const specs = toSpecs(tools);
-  const llm = new LLM(config.baseUrl, config.apiKey, config.extraBody);
+  const llm = new LLM(config.baseUrl, config.apiKey, config.extraBody, config.requestTimeoutS * 1000);
   const ctx: ToolContext = {
     config,
     session,
@@ -80,6 +79,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
       model: config.model,
       messages: session.messages,
       tools: specs,
+      temperature: config.temperature,
       onDelta: config.stream
         ? (d) => onEvent("content" in d ? { type: "delta", kind: "content", text: d.content } : { type: "delta", kind: "reasoning", text: d.reasoning })
         : undefined,
@@ -93,9 +93,11 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
     await session.log({
       type: "llm_call",
       model: config.model,
+      temperature: config.temperature,
       finish_reason: res.finishReason,
       usage: res.usage,
       latency_ms: res.latencyMs,
+      attempts: res.attempts,
       context_tokens_est: estimateTokens(session.messages),
       message: msg,
     });

@@ -3,3 +3,4 @@ dist/
 .arcode/
 *.log
 .env
+evals/results/*/sessions/

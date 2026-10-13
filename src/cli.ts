@@ -7,6 +7,8 @@ import { LLM } from "./llm.js";
 import { Session } from "./session.js";
 import { runAgent, type AgentEvent } from "./agent.js";
 import { compact } from "./context.js";
+import { evalMain } from "./eval/main.js";
+import { MarkdownStream, renderMarkdown } from "./markdown.js";
 
 const c = {
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
@@ -25,6 +27,7 @@ Usage:
   arcode --resume <id>           resume a specific session
   arcode --sessions              list sessions
   arcode --models                list models available on the endpoint
+  arcode eval --help             score the agent on test-graded tasks
 
 Options:
   -m, --model <id>               model id (or ARCODE_MODEL)
@@ -90,8 +93,12 @@ function renderer(showReasoning: boolean) {
   // Per model call: what was already streamed, so the full-text events don't repeat it.
   let streamed = { content: false, reasoning: false };
   let lineKind: "content" | "reasoning" | "status" | undefined; // what the cursor is in the middle of
+  // Markdown is styled only on a terminal; piped output stays raw markdown.
+  const tty = Boolean(stdout.isTTY);
+  let md = new MarkdownStream(stdout.columns || 80);
   const endLine = () => {
     if (lineKind === "status") stdout.write("\r\x1b[2K");
+    else if (lineKind === "content" && tty) stdout.write(md.flush() + "\n");
     else if (lineKind) stdout.write("\n");
     lineKind = undefined;
   };
@@ -99,7 +106,7 @@ function renderer(showReasoning: boolean) {
     if (e.type === "delta") {
       if (e.kind === "reasoning" && !showReasoning) return; // keep the "thinking…" line up
       if (lineKind !== e.kind) endLine();
-      stdout.write(e.kind === "reasoning" ? c.dim(e.text) : e.text);
+      stdout.write(e.kind === "reasoning" ? c.dim(e.text) : tty ? md.push(e.text) : e.text);
       streamed[e.kind] = true;
       lineKind = e.kind;
       return;
@@ -108,10 +115,11 @@ function renderer(showReasoning: boolean) {
     switch (e.type) {
       case "llm_start":
         streamed = { content: false, reasoning: false };
+        md = new MarkdownStream(stdout.columns || 80);
         if (stdout.isTTY) { stdout.write(c.dim(`thinking… (${e.model})`)); lineKind = "status"; }
         break;
       case "reasoning": if (showReasoning && !streamed.reasoning) console.log(c.dim(e.text.trim())); break;
-      case "assistant_text": if (!streamed.content) console.log(e.text.trim()); break;
+      case "assistant_text": if (!streamed.content) console.log(tty ? renderMarkdown(e.text.trim()) : e.text.trim()); break;
       case "tool_start": {
         const arg = e.args.command ?? e.args.path ?? e.args.query ?? e.args.url ?? e.args.pattern ?? "";
         console.log(c.cyan(`● ${e.name}`) + (arg ? c.dim(` ${String(arg).slice(0, 120)}`) : ""));
@@ -129,6 +137,7 @@ function renderer(showReasoning: boolean) {
 }
 
 async function main() {
+  if (process.argv[2] === "eval") return evalMain(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(HELP);
 
@@ -231,7 +240,7 @@ async function main() {
         else console.log(c.dim(`model: ${cfg.model}`));
       }
       else if (cmd === "compact" && session) {
-        const did = await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody), model: cfg.summaryModel, session });
+        const did = await compact({ llm: new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody, cfg.requestTimeoutS * 1000), model: cfg.summaryModel, session });
         await session.save();
         console.log(did ? "compacted" : "nothing to compact");
       } else console.log(`unknown command /${cmd}`);

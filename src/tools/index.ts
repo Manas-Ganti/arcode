@@ -2,6 +2,7 @@ import type { ToolSpec } from "../llm.js";
 import type { Tool } from "./types.js";
 import { editFileTool, grepTool, listDirTool, readFileTool, writeFileTool } from "./fs.js";
 import { bashTool } from "./shell.js";
+import { runTestsTool } from "./tests.js";
 import { webFetchTool, webSearchTool } from "./web.js";
 import { noteTool, todoTool } from "./task.js";
 
@@ -12,6 +13,7 @@ export const ALL_TOOLS: Tool[] = [
   listDirTool,
   grepTool,
   bashTool,
+  runTestsTool,
   webSearchTool,
   webFetchTool,
   todoTool,

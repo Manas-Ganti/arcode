@@ -10,6 +10,12 @@ export interface Config {
   summaryModel: string;
   /** Approximate token budget before compaction kicks in. 0 = derive from the model (see models.ts). */
   contextBudget: number;
+  /** Overrides run_tests' auto-detected test command (ARCODE_TEST_CMD). */
+  testCmd?: string;
+  /** Sampling temperature for agent turns (ARCODE_TEMPERATURE); logged in every llm_call event. */
+  temperature: number;
+  /** Abort a model request after this many seconds without data, then retry (ARCODE_REQUEST_TIMEOUT_S). */
+  requestTimeoutS: number;
   /** Stream agent turns (SSE). Off with ARCODE_STREAM=0. */
   stream: boolean;
   /** Extra JSON merged into every chat request (ARCODE_EXTRA_BODY), e.g. reasoning_effort. */
@@ -40,6 +46,9 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     contextBudget: Number(env.ARCODE_CONTEXT_BUDGET ?? 0),
     extraBody: parseExtraBody(env.ARCODE_EXTRA_BODY),
     stream: env.ARCODE_STREAM !== "0",
+    requestTimeoutS: Number(env.ARCODE_REQUEST_TIMEOUT_S ?? 180),
+    testCmd: env.ARCODE_TEST_CMD || undefined,
+    temperature: Number(env.ARCODE_TEMPERATURE ?? 0.2),
     maxTurns: Number(env.ARCODE_MAX_TURNS ?? 60),
     autoApprove: env.ARCODE_YES === "1",
     workdir: process.cwd(),

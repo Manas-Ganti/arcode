@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { loadConfig, loadEnvFile } from "../src/config.js";
 import { defaultContextBudget, modelSpec, resolveModel } from "../src/models.js";
 import { Session } from "../src/session.js";
+import { LLM } from "../src/llm.js";
+import { MarkdownStream, renderMarkdown } from "../src/markdown.js";
 import { runAgent } from "../src/agent.js";
 
 let n = 0;
@@ -94,6 +96,40 @@ loadEnvFile();
 const envCfg = loadConfig();
 checks.push(["VTARC_API_KEY loaded from ARCODE_HOME/.env", envCfg.apiKey === "from-file"]);
 checks.push(["real env var beats .env", envCfg.model === "from-env"]);
+
+// Stalls: the first request of each kind hangs (mid-stream, or before any response); the retry answers.
+let stallHits = 0;
+const stallServer = createServer(async (req, res) => {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  const j = JSON.parse(body);
+  stallHits++;
+  if (stallHits === 1) { res.setHeader("Content-Type", "text/event-stream"); res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: "par" } }] })}\n\n`); return; }
+  if (stallHits === 3) return; // never respond
+  if (j.stream) return streamSSE(res, { content: "recovered" });
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "recovered" }, finish_reason: "stop" }] }));
+});
+await new Promise<void>((r) => stallServer.listen(0, r));
+const stallLLM = new LLM(`http://127.0.0.1:${(stallServer.address() as any).port}/v1`, "x", {}, 300);
+const streamed = await stallLLM.chat({ model: "m", messages: [{ role: "user", content: "hi" }], onDelta: () => {} }).catch((e) => e);
+const buffered = await stallLLM.chat({ model: "m", messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
+stallServer.closeAllConnections();
+stallServer.close();
+checks.push(["stalled stream is aborted and retried", streamed?.message?.content === "recovered" && streamed.attempts === 2]);
+checks.push(["stalled buffered request is aborted and retried", buffered?.message?.content === "recovered" && stallHits === 4]);
+
+// Markdown → ANSI (ESC[1m bold, ESC[3m italic, ESC[36m code).
+const B = "\x1b[1m", I = "\x1b[3m", C = "\x1b[36m";
+const md = renderMarkdown("Use **bold** and *it* with `**raw**`\n2 * 3 * 4 and snake_case_name\n```\n**not bold** in fence\n```\n# Title\n- item");
+const mdLines = md.split("\n");
+checks.push(["markdown: bold, italic, code", mdLines[0].includes(`${B}bold`) && mdLines[0].includes(`${I}it`) && mdLines[0].includes(`${C}**raw**`)]);
+checks.push(["markdown: math and snake_case untouched", mdLines[1] === "2 * 3 * 4 and snake_case_name"]);
+checks.push(["markdown: fenced code left verbatim", mdLines[3].includes("**not bold**") && !mdLines[3].includes(B)]);
+checks.push(["markdown: heading and bullet", mdLines[5].includes(`${B}`) && !mdLines[5].includes("#") && mdLines[6].startsWith("• ")]);
+const ms = new MarkdownStream(80);
+const streamedMd = ms.push("a **b") + ms.push("old** c\nnext *x*") + ms.flush();
+checks.push(["markdown: span split across stream chunks is styled on redraw", streamedMd.includes(`${B}bold`) && streamedMd.includes(`${I}x`)]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 const failed = checks.filter(([, ok]) => !ok).length;

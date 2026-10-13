@@ -28,6 +28,8 @@ export interface ChatResult {
   finishReason: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   latencyMs: number;
+  /** 1 unless the request was retried (429/5xx, network error, or stall). */
+  attempts: number;
 }
 
 /** One streamed fragment of the assistant message. */
@@ -40,12 +42,21 @@ export class LLMError extends Error {
 }
 
 export class LLM {
-  /** `extraBody` is merged into every chat request, after the model's own params from models.ts. */
-  constructor(private baseUrl: string, private apiKey: string, private extraBody: Record<string, unknown> = {}) {}
+  /**
+   * `extraBody` is merged into every chat request, after the model's own params from models.ts.
+   * `timeoutMs`: a streamed request is aborted after this long with no data; a buffered one after this long in total.
+   */
+  constructor(
+    private baseUrl: string,
+    private apiKey: string,
+    private extraBody: Record<string, unknown> = {},
+    private timeoutMs = 180_000,
+  ) {}
 
   async listModels(): Promise<string[]> {
     const res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/models`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     if (!res.ok) throw new LLMError(`GET /models failed: ${res.status}`, res.status, await res.text());
     const json = (await res.json()) as { data?: { id: string }[] };
@@ -79,52 +90,70 @@ export class LLM {
       body.stream_options = { include_usage: true };
     }
 
-    // ARC rate limits are ~60 req/min, so back off on 429 and transient 5xx.
+    // ARC rate limits are ~60 req/min, so back off on 429 and transient 5xx. A stalled request
+    // (no data for timeoutMs: dead connection, stuck upstream) is aborted and retried the same way.
     const maxAttempts = 6;
     for (let attempt = 1; ; attempt++) {
       const t0 = Date.now();
-      let res: Response;
+      const ctrl = new AbortController();
+      const forward = () => ctrl.abort();
+      opts.signal?.addEventListener("abort", forward, { once: true });
+      let stalled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { stalled = true; ctrl.abort(); }, this.timeoutMs);
+      };
+      arm();
       try {
-        res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        const res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
           body: JSON.stringify(body),
-          signal: opts.signal,
+          signal: ctrl.signal,
         });
-      } catch (e) {
-        if (attempt >= maxAttempts || opts.signal?.aborted) throw e;
-        await sleep(backoff(attempt));
-        continue;
-      }
-      if (res.status === 429 || res.status >= 500) {
-        const text = await res.text();
-        if (attempt >= maxAttempts) throw new LLMError(`chat failed after ${attempt} attempts: ${res.status}`, res.status, text);
-        const retryAfter = Number(res.headers.get("retry-after"));
-        await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoff(attempt));
-        continue;
-      }
-      if (!res.ok) throw new LLMError(`chat failed: ${res.status}`, res.status, await res.text());
+        if (res.status === 429 || res.status >= 500) {
+          const text = await res.text();
+          clearTimeout(timer);
+          if (attempt >= maxAttempts) throw new LLMError(`chat failed after ${attempt} attempts: ${res.status}`, res.status, text);
+          const retryAfter = Number(res.headers.get("retry-after"));
+          await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoff(attempt));
+          continue;
+        }
+        if (!res.ok) throw new LLMError(`chat failed: ${res.status}`, res.status, await res.text());
 
-      let m: any, finishReason: string | undefined, usage: ChatResult["usage"];
-      if (opts.onDelta) {
-        ({ m, finishReason, usage } = await readStream(res, opts.onDelta));
-      } else {
-        const json = (await res.json()) as any;
-        const choice = json.choices?.[0];
-        if (!choice) throw new LLMError("no choices in response", res.status, JSON.stringify(json).slice(0, 2000));
-        m = choice.message ?? {};
-        finishReason = choice.finish_reason;
-        usage = json.usage;
+        let m: any, finishReason: string | undefined, usage: ChatResult["usage"];
+        if (opts.onDelta) {
+          ({ m, finishReason, usage } = await readStream(res, opts.onDelta, arm));
+        } else {
+          const json = (await res.json()) as any;
+          const choice = json.choices?.[0];
+          if (!choice) throw new LLMError("no choices in response", res.status, JSON.stringify(json).slice(0, 2000));
+          m = choice.message ?? {};
+          finishReason = choice.finish_reason;
+          usage = json.usage;
+        }
+        // DeepSeek-style servers use `reasoning_content`; vLLM-style (incl. VT ARC) use `reasoning`.
+        const reasoning = m.reasoning_content || m.reasoning;
+        const message: ChatResult["message"] = {
+          role: "assistant",
+          content: m.content ?? null,
+          ...(m.tool_calls?.length ? { tool_calls: normalizeToolCalls(m.tool_calls) } : {}),
+          ...(reasoning ? { reasoning_content: reasoning } : {}),
+        };
+        return { message, finishReason: finishReason ?? "unknown", usage, latencyMs: Date.now() - t0, attempts: attempt };
+      } catch (e) {
+        // HTTP errors and caller aborts are final; network errors and stalls are retried.
+        if (e instanceof LLMError || (opts.signal?.aborted && !stalled)) throw e;
+        clearTimeout(timer);
+        if (attempt >= maxAttempts) {
+          throw stalled ? new LLMError(`no data from the endpoint for ${this.timeoutMs / 1000}s (stalled), ${attempt} attempts`) : e;
+        }
+        await sleep(backoff(attempt));
+      } finally {
+        clearTimeout(timer);
+        opts.signal?.removeEventListener("abort", forward);
       }
-      // DeepSeek-style servers use `reasoning_content`; vLLM-style (incl. VT ARC) use `reasoning`.
-      const reasoning = m.reasoning_content || m.reasoning;
-      const message: ChatResult["message"] = {
-        role: "assistant",
-        content: m.content ?? null,
-        ...(m.tool_calls?.length ? { tool_calls: normalizeToolCalls(m.tool_calls) } : {}),
-        ...(reasoning ? { reasoning_content: reasoning } : {}),
-      };
-      return { message, finishReason: finishReason ?? "unknown", usage, latencyMs: Date.now() - t0 };
     }
   }
 }
@@ -133,7 +162,7 @@ export class LLM {
  * Assemble an SSE chat stream into the same shape as a non-streamed `message`.
  * Tool calls arrive as fragments keyed by `index`; their arguments are concatenated.
  */
-async function readStream(res: Response, onDelta: (d: Delta) => void) {
+async function readStream(res: Response, onDelta: (d: Delta) => void, onActivity: () => void) {
   const m = { content: "", reasoning: "", tool_calls: [] as any[] };
   let finishReason: string | undefined;
   let usage: ChatResult["usage"];
@@ -143,6 +172,7 @@ async function readStream(res: Response, onDelta: (d: Delta) => void) {
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
+    onActivity();
     buf += decoder.decode(value, { stream: true });
     let nl: number;
     while ((nl = buf.indexOf("\n")) >= 0) {

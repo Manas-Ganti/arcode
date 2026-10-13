@@ -1,0 +1,12 @@
+{
+  "id": "calc-unary-decimal",
+  "prompt": "The calculator in the calc/ package can't handle negative numbers or decimals: evaluate(\"-3 + 2.5\") raises SyntaxError. Add unary minus (including before parentheses and repeated, like \"--4\") and decimal numbers (\"2.5\", \".5\"). Keep existing behaviour: operator precedence, parentheses, and SyntaxError on malformed input.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 25,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "feature",
+    "multi-file"
+  ]
+}

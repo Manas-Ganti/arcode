@@ -1,0 +1,12 @@
+{
+  "id": "csv-category-totals",
+  "prompt": "category_totals in report.py splits lines on commas by hand, so it breaks on standard CSV: quoted fields containing commas (\"Smith, J\"), blank lines, and CRLF line endings. Make it parse CSV properly. Columns may appear in any order; return {category: total amount as float}.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 25,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "bugfix",
+    "parsing"
+  ]
+}

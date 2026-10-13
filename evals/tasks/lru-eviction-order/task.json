@@ -1,0 +1,12 @@
+{
+  "id": "lru-eviction-order",
+  "prompt": "LRUCache in lru.py evicts the oldest *inserted* key when full, but it should evict the least recently *used* key. Both get() of an existing key and put() (new or existing key) count as a use; `in` checks and len() do not. Fix it without changing the public API.",
+  "test_cmd": "python3 -m pytest -q -p no:cacheprovider tests",
+  "max_turns": 25,
+  "timeout_s": 120,
+  "tags": [
+    "python",
+    "bugfix",
+    "data-structure"
+  ]
+}
