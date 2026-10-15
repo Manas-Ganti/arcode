@@ -140,6 +140,10 @@ Each task in `evals/tasks/<id>/` has `task.json`, `repo/` (all the agent sees), 
 
 Evals run the agent with auto-approved `bash`, unsandboxed. Only run tasks you trust until the container runner lands.
 
+## Benchmarks (Harbor)
+
+`integrations/harbor/` runs arcode on containerized benchmarks such as Terminal-Bench 2.0 and SWE-rebench through [Harbor](https://github.com/harbor-framework/harbor). It installs your local build into each task container and brings arcode's trajectories back with the results. See [integrations/harbor/README.md](integrations/harbor/README.md).
+
 ## Tests
 
 ```bash

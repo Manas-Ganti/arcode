@@ -3,7 +3,14 @@
   "version": "0.1.0",
   "description": "Minimal, research-grade coding agent harness for OpenAI-compatible endpoints (VT ARC: GLM, DeepSeek). Logs every run as RL-ready trajectories.",
   "type": "module",
-  "bin": { "arcode": "./dist/cli.js" },
+  "bin": {
+    "arcode": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx src/cli.ts",
     "probe": "tsx scripts/probe-arc.ts",
@@ -12,7 +19,9 @@
     "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts && tsx scripts/mock-mcp.ts"
   },
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
