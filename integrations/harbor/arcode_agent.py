@@ -3,8 +3,8 @@ Harbor adapter for arcode: runs arcode headless inside a benchmark task containe
 (Terminal-Bench 2.0, SWE-rebench, ... any Harbor dataset).
 
     cd integrations/harbor
-    harbor run -d terminal-bench/terminal-bench-2 \\
-        --agent-import-path arcode_agent:Arcode -m DeepSeek-V4.1-Flash
+    PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 \\
+        -a arcode_agent:Arcode -m DeepSeek-V4.1-Flash
 
 How it works:
 - install(): installs Node (Harbor's nvm helper), then a tarball of *your local

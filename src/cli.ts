@@ -17,13 +17,10 @@ import { homedir } from "node:os";
 import { startMcp } from "./mcp.js";
 import { ALL_TOOLS } from "./tools/index.js";
 
-const c = {
-  dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
-  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
-  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
-  red: (s: string) => `\x1b[31m${s}\x1b[0m`,
-  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
-};
+// Colors only on a terminal, so logs (e.g. benchmark runs piped through tee) stay plain. NO_COLOR is honored.
+const color = Boolean(stdout.isTTY) && !process.env.NO_COLOR;
+const paint = (code: number) => (s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
+const c = { dim: paint(2), cyan: paint(36), yellow: paint(33), red: paint(31), bold: paint(1) };
 
 const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 

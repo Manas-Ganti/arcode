@@ -10,3 +10,4 @@ dist/
 evals/results/*/sessions/
 __pycache__/
 *.pyc
+integrations/harbor/jobs/

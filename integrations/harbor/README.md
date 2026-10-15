@@ -14,25 +14,25 @@
 
 ## Run
 
-From this folder (so Harbor can import `arcode_agent`):
+From this folder, with `PYTHONPATH=.` so Harbor can import `arcode_agent` (Harbor's own Python doesn't look in the current folder):
 
 ```bash
 cd integrations/harbor
 
 # smoke test: 3 tasks
-harbor run -d terminal-bench/terminal-bench-2 --agent-import-path arcode_agent:Arcode \
+PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 -a arcode_agent:Arcode \
   -m DeepSeek-V4.1-Flash -l 3 -n 1 -o jobs
 
 # one named task
-harbor run -d terminal-bench/terminal-bench-2 --agent-import-path arcode_agent:Arcode \
-  -m GLM-5.3 -i fix-git -o jobs
+PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 -a arcode_agent:Arcode \
+  -m GLM-5.3 -i terminal-bench/fix-git -o jobs
 
 # full benchmark (89 tasks), 4 at a time
-harbor run -d terminal-bench/terminal-bench-2 --agent-import-path arcode_agent:Arcode \
+PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 -a arcode_agent:Arcode \
   -m DeepSeek-V4.1-Flash -n 4 -o jobs
 ```
 
-Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--ak show_reasoning=true`.
+Task names carry the dataset prefix (`terminal-bench/fix-git`). Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--ak show_reasoning=true`.
 
 ## What the adapter does
 
@@ -41,6 +41,10 @@ Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--a
 - **Key handling**: the key is passed as an environment variable, which Harbor redacts in its logs, and arcode never passes it on to the commands it runs.
 - **Trajectories come back**: `ARCODE_HOME` is set to `/logs/agent/arcode`, which Harbor syncs to `jobs/<job>/<trial>/agent/arcode/sessions/*/trajectory.jsonl`. arcode's console output is in `agent/arcode.txt`.
 - **Grading is the task's**: arcode exits non-zero when it hits `max_turns`; the adapter records that in `agent/arcode-exit-code` and lets the task's tests decide. Token counts, status and turns go into the trial's agent context.
+
+## Verified
+
+Smoke run, 2026-10-15: `terminal-bench/fix-git` with DeepSeek-V4.1-Flash, reward 1.0 in 12 turns (1 min 22 s including the container build and install), trajectory synced back.
 
 ## Notes
 
