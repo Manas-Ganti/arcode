@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 import time
@@ -89,6 +90,11 @@ def main() -> None:
     p.add_argument("--ak", action="append", default=[], help="agent option passed to harbor (repeatable)")
     p.add_argument("--dry-run", action="store_true", help="print the plan and the first harbor command, run nothing")
     a = p.parse_args()
+    # Docker Desktop's CLI lives in ~/.docker/bin, which isn't always on PATH.
+    if not shutil.which("docker"):
+        os.environ["PATH"] = f"{Path.home() / '.docker' / 'bin'}{os.pathsep}{os.environ['PATH']}"
+    if not shutil.which("docker"):
+        sys.exit("docker not found (is Docker Desktop installed and running?)")
 
     run = a.run or f"rebench-{a.split}-{a.model}-s{a.seed}"
     run_dir = HERE / "runs" / run
@@ -109,7 +115,7 @@ def main() -> None:
         return
 
     check_arc()
-    env = {**os.environ, "PYTHONPATH": str(HERE), "PATH": f"{Path.home() / '.docker' / 'bin'}:{os.environ['PATH']}"}
+    env = {**os.environ, "PYTHONPATH": str(HERE)}
     jobs_file = run_dir / "jobs.json"
     for b in range(0, len(todo), a.batch):
         batch = todo[b : b + a.batch]
