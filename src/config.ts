@@ -16,6 +16,12 @@ export interface Config {
   temperature: number;
   /** Abort a model request after this many seconds without data, then retry (ARCODE_REQUEST_TIMEOUT_S). */
   requestTimeoutS: number;
+  /** Output cap per model call, reasoning included (ARCODE_MAX_OUTPUT_TOKENS). Bounds runaway generations. */
+  maxOutputTokens: number;
+  /** Wall-clock limit per model call in seconds (ARCODE_CALL_TIMEOUT_S); the run continues with a notice. */
+  callTimeoutS: number;
+  /** Optional time budget for a task in seconds (ARCODE_DEADLINE_S): the model is told as it runs low. */
+  deadlineS?: number;
   /** Stream agent turns (SSE). Off with ARCODE_STREAM=0. */
   stream: boolean;
   /** Extra JSON merged into every chat request (ARCODE_EXTRA_BODY), e.g. reasoning_effort. */
@@ -47,6 +53,9 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     extraBody: parseExtraBody(env.ARCODE_EXTRA_BODY),
     stream: env.ARCODE_STREAM !== "0",
     requestTimeoutS: Number(env.ARCODE_REQUEST_TIMEOUT_S ?? 180),
+    maxOutputTokens: Number(env.ARCODE_MAX_OUTPUT_TOKENS ?? 16_384),
+    callTimeoutS: Number(env.ARCODE_CALL_TIMEOUT_S ?? 300),
+    deadlineS: env.ARCODE_DEADLINE_S ? Number(env.ARCODE_DEADLINE_S) : undefined,
     testCmd: env.ARCODE_TEST_CMD || undefined,
     temperature: Number(env.ARCODE_TEMPERATURE ?? 0.2),
     maxTurns: Number(env.ARCODE_MAX_TURNS ?? 60),

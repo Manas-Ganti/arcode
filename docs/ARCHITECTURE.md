@@ -10,6 +10,7 @@ src/
   agent.ts      the loop: build prompt → call model → run tools → repeat
   llm.ts        OpenAI-compatible client (raw fetch, SSE streaming, retries/backoff on 429/5xx)
   context.ts    token estimate + compaction (summarize middle, keep head/tail)
+  guards.ts     harness notices: output cap/call timeout recovery, deadline, loop detection, verify-before-finish
   session.ts    on-disk session: messages, trajectory, todos, notes
   mcp.ts        MCP client (stdio): ~/.arcode/mcp.json servers → mcp__<server>__<tool> tools
   commands.ts   custom /commands (markdown prompt files) and `!shell` context framing
@@ -47,6 +48,20 @@ evals/
 
 Tool errors are returned to the model as text (`error: …`), never thrown, so the model can recover. Each tool returns a string; output is truncated head+tail at 20K chars.
 
+## Guards (guards.ts)
+
+Each guard turns a failure mode seen in evals into a short `<harness_notice>` to the model instead of a lost task:
+
+| Guard | Trigger | Seen in |
+|---|---|---|
+| Output cap | `max_tokens` (16k) hit with no tool call: the partial response is discarded, not taken as the answer | a reasoning stream that used 9.5 of 15 minutes (Terminal-Bench) |
+| Call timeout | one model call over 300 s: stopped, run continues | same |
+| Deadline | 30% and 10% of `ARCODE_DEADLINE_S` left | every Terminal-Bench pilot failure was a timeout |
+| Loop | same tool + same arguments 3 times in the last 10 calls | 27 bash calls reading library source (M2 eval) |
+| Verify | about to finish after editing files without re-running tests (once per task) | a confident wrong "done" (M2 eval) |
+
+Guards change agent behaviour, so eval results should name the arcode commit they ran on.
+
 ## Context management
 
 Three layers, from cheapest to most expensive:
@@ -68,7 +83,7 @@ Edit safety: `edit_file` and overwriting `write_file` require the file was `read
 - Eval sessions also get `eval_task` and `eval_result` (`resolved`, `reward`, test counts, `touched_protected`) events, plus `eval_diff.patch` and `eval_grade_output.txt`.
 - `meta.json`: task, model, status (`done | error | max_turns | interrupted`), turns, token usage, compactions
 - `messages.json`: the current context window (what gets resumed)
-- `trajectory.jsonl`: one event per line: `session_start`, `user`, `llm_call` (full message, usage, latency, finish reason, context size, temperature, attempts), `tool` (name, args, ok, ms, output), `todos`, `note`, `compaction`, `error`, `llm_retry` (attempt, reason: stalled | network | http, elapsed), `llm_aborted` (a call that failed or was cut off: elapsed time and how much content/reasoning had streamed). Every event has an ISO timestamp `t`
+- `trajectory.jsonl`: one event per line: `session_start`, `user`, `llm_call` (full message, usage, latency, finish reason, context size, temperature, attempts), `tool` (name, args, ok, ms, output), `todos`, `note`, `compaction`, `error`, `llm_retry` (attempt, reason: stalled | network | http, elapsed), `notice` (kind: truncated | call_timeout | deadline | loop | verify, text; also sent to the model as a `<harness_notice>` user message), `llm_aborted` (a call that failed or was cut off: elapsed time and how much content/reasoning had streamed). Every event has an ISO timestamp `t`
 - `todos.json`, `notes.md`
 
 The trajectory format is the research hook. Every run, interactive or benchmark, becomes (state, action, observation) data with outcome metadata.

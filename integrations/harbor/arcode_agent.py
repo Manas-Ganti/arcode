@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import tomllib
 import shlex
 import subprocess
 import tempfile
@@ -50,6 +51,9 @@ NVM = 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"'
 
 class ArcodeOptions(InstalledAgentOptions):
     max_turns: int = Field(default=60, description="arcode --max-turns (ARCODE_MAX_TURNS).")
+    deadline_s: float | None = Field(default=None, description="Time budget told to arcode (ARCODE_DEADLINE_S). Default: the task's agent timeout minus 30 s.")
+    max_output_tokens: int | None = Field(default=None, description="Output cap per model call (ARCODE_MAX_OUTPUT_TOKENS; arcode default 16384).")
+    call_timeout_s: int | None = Field(default=None, description="Time limit per model call (ARCODE_CALL_TIMEOUT_S; arcode default 300).")
     temperature: float | None = Field(default=None, description="ARCODE_TEMPERATURE (arcode default 0.2).")
     show_reasoning: bool = Field(default=False, description="Also print reasoning text to arcode.txt.")
 
@@ -124,6 +128,25 @@ class Arcode(BaseInstalledAgent):
             env["ARC_BASE_URL"] = base
         return env
 
+    def _task_deadline(self) -> float | None:
+        """The task's agent timeout (from Harbor's task cache), minus a margin, so arcode can pace itself.
+
+        Harbor applies the timeout outside the agent and doesn't pass it in, so read it the way Harbor
+        does: the trial's config.json names the task and its content hash, and the cached task.toml
+        holds [agent] timeout_sec. Best effort: returns None if anything is missing.
+        """
+        try:
+            trial = json.loads((self.logs_dir.parent / "config.json").read_text())
+            name, ref = trial["task"]["name"], trial["task"]["ref"].removeprefix("sha256:")
+            toml_path = Path.home() / ".cache" / "harbor" / "tasks" / "packages" / name / ref / "task.toml"
+            timeout = tomllib.loads(toml_path.read_text())["agent"]["timeout_sec"]
+            agent_cfg = trial.get("agent") or {}
+            timeout = agent_cfg.get("override_timeout_sec") or timeout
+            timeout *= trial.get("agent_timeout_multiplier") or 1
+            return max(60.0, float(timeout) - 30)
+        except (OSError, KeyError, TypeError, ValueError):
+            return None
+
     def _model(self) -> str:
         if not self.model_name:
             raise ValueError("Pass a model with -m, e.g. -m DeepSeek-V4.1-Flash")
@@ -141,6 +164,13 @@ class Arcode(BaseInstalledAgent):
         }
         if self.options.temperature is not None:
             env["ARCODE_TEMPERATURE"] = str(self.options.temperature)
+        deadline = self.options.deadline_s or self._task_deadline()
+        if deadline:
+            env["ARCODE_DEADLINE_S"] = str(int(deadline))
+        if self.options.max_output_tokens:
+            env["ARCODE_MAX_OUTPUT_TOKENS"] = str(self.options.max_output_tokens)
+        if self.options.call_timeout_s:
+            env["ARCODE_CALL_TIMEOUT_S"] = str(self.options.call_timeout_s)
         flags = "--show-reasoning " if self.options.show_reasoning else ""
         await self.exec_as_agent(
             environment,

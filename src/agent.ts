@@ -7,12 +7,15 @@ import { Session } from "./session.js";
 import { ALL_TOOLS, toSpecs, type Tool, type ToolContext } from "./tools/index.js";
 import { compact, estimateTokens } from "./context.js";
 import { defaultContextBudget } from "./models.js";
+import { Guards, noticeMessage, type Notice } from "./guards.js";
+import { detectTestCommand } from "./tools/tests.js";
 
 export type AgentEvent =
   | { type: "assistant_text"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "llm_start"; model: string }
   | { type: "llm_retry"; attempt: number; reason: string; status?: number }
+  | { type: "notice"; kind: string; text: string }
   /** Streamed fragment; `assistant_text`/`reasoning` still follow with the full text. */
   | { type: "delta"; kind: "content" | "reasoning"; text: string }
   | { type: "tool_start"; name: string; args: any }
@@ -54,7 +57,8 @@ ${tools.some((t) => t.name === "web_search") ? "- Use web_search + web_fetch whe
 
 export async function runAgent(userInput: string, opts: AgentOptions): Promise<string> {
   const { config, session, approve, onEvent = () => {} } = opts;
-  const tools = opts.tools ?? ALL_TOOLS;
+  // web_search can't work without a search provider; don't offer it (models call it anyway).
+  const tools = (opts.tools ?? ALL_TOOLS).filter((t) => t.name !== "web_search" || config.search.provider !== "none");
   const byName = new Map(tools.map((t) => [t.name, t]));
   const specs = toSpecs(tools);
   const llm = new LLM(config.baseUrl, config.apiKey, config.extraBody, config.requestTimeoutS * 1000);
@@ -72,9 +76,24 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
   await session.log({ type: "user", content: userInput });
   session.meta.status = "running";
 
+  const guards = new Guards({
+    deadlineS: config.deadlineS,
+    testsAvailable: Boolean(detectTestCommand(config.workdir, config.testCmd)),
+    maxOutputTokens: config.maxOutputTokens,
+    callTimeoutS: config.callTimeoutS,
+  });
+  /** A harness notice reaches the model as a user message, and the trajectory as a `notice` event. */
+  const notify = async (n: Notice) => {
+    session.messages.push({ role: "user", content: noticeMessage(n) });
+    await session.log({ type: "notice", kind: n.kind, text: n.text });
+    onEvent({ type: "notice", kind: n.kind, text: n.text });
+  };
+
   let finalText = "";
   for (let turn = 0; turn < config.maxTurns; turn++) {
     if (opts.signal?.aborted) throw new Error("run aborted (time limit)");
+    const deadline = guards.beforeCall();
+    if (deadline) await notify(deadline);
     if (estimateTokens(session.messages) > (config.contextBudget || defaultContextBudget(config.model))) {
       if (await compact({ llm, model: config.summaryModel, session })) onEvent({ type: "compaction" });
     }
@@ -83,6 +102,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
     // Streamed sizes so far: if the call fails or is cut off, they show a stall (0) vs a runaway generation.
     const streamedChars = { content: 0, reasoning: 0 };
     const callStart = Date.now();
+    const callTimer = AbortSignal.timeout(config.callTimeoutS * 1000);
     let res;
     try {
       res = await llm.chat({
@@ -90,7 +110,9 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
         messages: session.messages,
         tools: specs,
         temperature: config.temperature,
-        signal: opts.signal,
+        // ARC's proxy rejects max_tokens > 8000 on non-streamed requests.
+        maxTokens: config.stream ? config.maxOutputTokens : Math.min(config.maxOutputTokens, 8000),
+        signal: opts.signal ? AbortSignal.any([opts.signal, callTimer]) : callTimer,
         onRetry: (r) => {
           void session.log({ type: "llm_retry", model: config.model, ...r });
           onEvent({ type: "llm_retry", attempt: r.attempt, reason: r.reason, status: r.status });
@@ -107,6 +129,8 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
         type: "llm_aborted", model: config.model, elapsed_ms: Date.now() - callStart, message: e?.message ?? String(e),
         streamed_content_chars: streamedChars.content, streamed_reasoning_chars: streamedChars.reasoning,
       });
+      // A single call running past its limit is recoverable; the whole run's limit is not.
+      if (callTimer.aborted && !opts.signal?.aborted) { session.meta.turns++; await notify(guards.callTimeout()); continue; }
       throw e;
     }
     let msg = res.message;
@@ -127,6 +151,12 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
       message: msg,
     });
 
+    // Cut off by the output cap with nothing actionable: discard it rather than treat it as the answer.
+    if (res.finishReason === "length" && !msg.tool_calls?.length) {
+      await notify(guards.truncated());
+      continue;
+    }
+
     // Reasoning text is logged but not sent back: most reasoning APIs reject it in history.
     const { reasoning_content, ...toSend } = msg;
     if (reasoning_content) onEvent({ type: "reasoning", text: reasoning_content });
@@ -134,6 +164,8 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
     session.messages.push(toSend);
 
     if (!msg.tool_calls?.length) {
+      const verify = guards.beforeFinish();
+      if (verify) { await notify(verify); continue; }
       finalText = msg.content ?? "";
       session.meta.status = "done";
       await session.save();
@@ -141,11 +173,15 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
       return finalText;
     }
 
+    const ran: { call: ToolCall; ok: boolean }[] = [];
     for (const call of msg.tool_calls) {
       const result = await executeTool(call, byName, ctx, onEvent);
       session.messages.push({ role: "tool", tool_call_id: call.id, content: result.output });
       await session.log({ type: "tool", name: call.function.name, args: result.args, ok: result.ok, ms: result.ms, output: result.output });
+      ran.push({ call, ok: result.ok });
     }
+    const loop = guards.afterTools(ran);
+    if (loop) await notify(loop);
     await session.save();
   }
 

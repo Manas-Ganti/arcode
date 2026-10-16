@@ -56,7 +56,7 @@ export const webSearchTool: Tool = {
 
 export const webFetchTool: Tool = {
   name: "web_fetch",
-  description: "Fetch a URL and return its readable text (HTML stripped). Use after web_search, or for a doc URL you already know.",
+  description: "Fetch a URL and return its readable text (HTML stripped), e.g. documentation pages or search results you already have a URL for.",
   parameters: {
     type: "object",
     properties: {

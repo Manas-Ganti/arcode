@@ -113,6 +113,9 @@ Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the r
 | `ARCODE_MODEL` | first GLM model listed, then DeepSeek |
 | `ARCODE_SUMMARY_MODEL` | same as model |
 | `ARCODE_CONTEXT_BUDGET` | 75% of the model's context window (`src/models.ts`), in estimated tokens before compaction |
+| `ARCODE_MAX_OUTPUT_TOKENS` | `16384`. Output cap per model call, reasoning included; a cut-off response is discarded and the agent is told to act in smaller steps |
+| `ARCODE_CALL_TIMEOUT_S` | `300`. Time limit per model call; the run continues with a notice |
+| `ARCODE_DEADLINE_S` | none. Optional time budget for a task; the agent is told when 30% and 10% remain (the Harbor adapter sets it from each task's timeout) |
 | `ARCODE_REQUEST_TIMEOUT_S` | `180`. A model request with no data for this long is aborted and retried (up to 6 attempts) |
 | `ARCODE_STREAM` | `1`. Agent turns stream token by token; `0` waits for whole replies |
 | `ARCODE_TEST_CMD` | auto-detected (npm test, pytest, go test, cargo test). Command used by `run_tests` |

@@ -32,7 +32,7 @@ PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 -a arcode_agent:Arcod
   -m DeepSeek-V4.1-Flash -n 4 -o jobs
 ```
 
-Task names carry the dataset prefix (`terminal-bench/fix-git`). Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--ak show_reasoning=true`.
+Task names carry the dataset prefix (`terminal-bench/fix-git`). Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--ak show_reasoning=true`, `--ak max_output_tokens=8000`, `--ak call_timeout_s=180`, `--ak deadline_s=600`. By default the adapter reads each task's agent timeout from Harbor's task cache and passes it (minus 30 s) as arcode's deadline, so arcode is told when time is running low.
 
 ## What the adapter does
 

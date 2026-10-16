@@ -171,6 +171,7 @@ function renderer(showReasoning: boolean) {
         break;
       }
       case "compaction": console.log(c.yellow("↻ context compacted")); break;
+      case "notice": console.log(c.yellow(`⚑ ${e.kind}: `) + c.dim(e.text)); break;
       case "done":
         note = undefined;
         if (e.status !== "done") console.log(c.yellow(`stopped: ${e.status}`));
