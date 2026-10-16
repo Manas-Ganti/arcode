@@ -281,8 +281,9 @@ async function main() {
   };
 
   if (typeof args.prompt === "string") {
-    const custom = args.prompt.startsWith("/") ? await customPrompt(args.prompt) : undefined;
-    if (args.prompt.startsWith("/") && !custom) throw new Error(`no command file for ${args.prompt.split(/\s/)[0]} (see /commands in the REPL)`);
+    // Headless: a matching command file expands; anything else (e.g. a task that starts with a path
+    // like "/tmp/x is broken") is sent as-is. Benchmark instructions can start with "/".
+    const custom = parseSlash(args.prompt) ? await customPrompt(args.prompt) : undefined;
     await run(custom ?? args.prompt);
     rl?.close();
     mcp.close();
@@ -340,7 +341,8 @@ async function main() {
       continue;
     }
     let input = line;
-    if (line.startsWith("/")) {
+    // Only `/name` or `/name args` is a command; a line starting with a path ("/tmp/x fails") is a prompt.
+    if (parseSlash(line)) {
       const [cmd, ...rest] = line.slice(1).split(/\s+/);
       if (cmd === "exit" || cmd === "quit") break;
       if (cmd === "help") console.log(HELP);

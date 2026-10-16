@@ -187,6 +187,7 @@ checks.push(["commands: built-in names can't be shadowed", !cmds.has("help")]);
 checks.push(["commands: description from frontmatter or first line", cmds.get("review")!.description === "Review a file for bugs" && cmds.get("fix")!.description === "Fix the failing tests"]);
 checks.push(["commands: $ARGUMENTS replaced, else appended", expandCommand(cmds.get("review")!.body, "src/llm.ts") === "Review src/llm.ts for bugs. Don't edit." && expandCommand("Do it.", "now") === "Do it.\n\nArguments: now" && expandCommand("Do it.", "") === "Do it."]);
 checks.push(["commands: slash parsing", JSON.stringify(parseSlash("/Review  a b")) === '{"name":"review","args":"a b"}' && parseSlash("not /a command") === undefined && parseSlash("/") === undefined]);
+checks.push(["commands: a leading path is not a command", parseSlash("/tmp/copier._vcs.clone dirs not deleted") === undefined && parseSlash("/usr/bin/env python fails") === undefined]);
 checks.push(["!command output is framed for the model", shellContext("git status", "clean\n", 0) === "<user_shell_command>\n$ git status\nclean\n[exit code 0]\n</user_shell_command>"]);
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
