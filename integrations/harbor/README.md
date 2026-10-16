@@ -34,6 +34,19 @@ PYTHONPATH=. harbor run -d terminal-bench/terminal-bench-2 -a arcode_agent:Arcod
 
 Task names carry the dataset prefix (`terminal-bench/fix-git`). Agent options go through `--ak`: `--ak max_turns=80`, `--ak temperature=0`, `--ak show_reasoning=true`, `--ak max_output_tokens=8000`, `--ak call_timeout_s=180`, `--ak deadline_s=600`. By default the adapter reads each task's agent timeout from Harbor's task cache and passes it (minus 30 s) as arcode's deadline, so arcode is told when time is running low.
 
+## SWE-rebench
+
+[SWE-rebench](https://arxiv.org/abs/2505.20411) is real GitHub issues collected after model training cutoffs, released in monthly splits (`nebius/SWE-rebench-leaderboard`; 860 tasks on Harbor, 443 repos). Each task is an issue plus the repo at its base commit, in a prebuilt x86 image; hidden tests grade it (50 min agent limit, up to 8 GB RAM). `run_rebench.py` runs a split in batches and removes each batch's Docker images afterwards (they're several GB each):
+
+```bash
+cd integrations/harbor
+python3 run_rebench.py --split 2026_03 --model DeepSeek-V4.1-Flash --sample 50 --seed 0 --batch 10 -n 2 --dry-run   # plan only
+python3 run_rebench.py --split 2026_03 --model DeepSeek-V4.1-Flash --sample 50 --seed 0 --batch 10 -n 2
+python3 run_rebench.py ... --resume      # continue an interrupted run, skipping finished tasks
+```
+
+It checks the ARC endpoint before starting and after every batch (403 = off the VT network), saves the task list and job names under `runs/<run>/`, and only removes images the batch itself added. Splits so far: `2025_01` ... `2026_03` (110 tasks, issues from March to May 2026); `test` is the whole set. Note the newest split predates some current models, so it isn't guaranteed contamination-free for them.
+
 ## What the adapter does
 
 - **Installs the code you have**: it runs `npm run build && npm pack` in this repo and installs that tarball in the task container (after installing Node 22 with Harbor's nvm helper). Uncommitted changes are included, so commit before a run you want to report, and note the commit.
