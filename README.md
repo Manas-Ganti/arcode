@@ -161,6 +161,8 @@ arcode export integrations/harbor/jobs evals/results -o sft.jsonl \
 
 Turns sessions into chat-format fine-tuning data: one JSON object per line with `messages` (OpenAI format, tool calls included, no reasoning), `tools` and `meta` (task, reward, model, turns). Rewards come from Harbor's `result.json` or from `arcode eval`'s `eval_result` event; infrastructure-interrupted runs and compacted sessions are skipped. **Always `--exclude` held-out test tasks.** `--min-reward 0` keeps failures too (e.g. for preference data). Use the same `--max-tool-chars` cap when evaluating a model trained on the output.
 
+Fine-tuning a student model on the exported data (Stage 2: prepare, LoRA SFT on an ARC GPU, serve with vLLM, benchmark base vs fine-tuned): see [training/README.md](training/README.md).
+
 Generating training trajectories on SWE-rebench months that don't overlap the test sample: `python3 integrations/harbor/run_rebench.py --split train --model DeepSeek-V4.1-Flash --batch 10 -n 2` (all monthly splits except `--holdout 2026_02,2026_03`, seeded shuffle, resumable).
 
 ## Tests

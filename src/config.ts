@@ -16,6 +16,8 @@ export interface Config {
   temperature: number;
   /** Abort a model request after this many seconds without data, then retry (ARCODE_REQUEST_TIMEOUT_S). */
   requestTimeoutS: number;
+  /** Cap on each tool result the model sees (ARCODE_MAX_TOOL_CHARS; 0 = tools' own 20k cap). Match `arcode export --max-tool-chars` when evaluating a model trained on that data. */
+  maxToolChars: number;
   /** Output cap per model call, reasoning included (ARCODE_MAX_OUTPUT_TOKENS). Bounds runaway generations. */
   maxOutputTokens: number;
   /** Wall-clock limit per model call in seconds (ARCODE_CALL_TIMEOUT_S); the run continues with a notice. */
@@ -53,6 +55,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     extraBody: parseExtraBody(env.ARCODE_EXTRA_BODY),
     stream: env.ARCODE_STREAM !== "0",
     requestTimeoutS: Number(env.ARCODE_REQUEST_TIMEOUT_S ?? 180),
+    maxToolChars: Number(env.ARCODE_MAX_TOOL_CHARS ?? 0),
     maxOutputTokens: Number(env.ARCODE_MAX_OUTPUT_TOKENS ?? 16_384),
     callTimeoutS: Number(env.ARCODE_CALL_TIMEOUT_S ?? 300),
     deadlineS: env.ARCODE_DEADLINE_S ? Number(env.ARCODE_DEADLINE_S) : undefined,

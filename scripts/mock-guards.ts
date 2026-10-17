@@ -108,6 +108,13 @@ checks.push(["finishing after an edit without tests → one verify nudge", verif
 const loop = await scripted([0, 1, 2].map(() => ({ msg: { content: null, tool_calls: [call("list_dir", {})] } })));
 checks.push(["repeated identical calls → loop notice in the next request", loop.notices.includes("loop") && JSON.stringify(loop.requests.at(-1).messages).includes("harness_notice")]);
 
+const capped = await scripted([
+  { msg: { content: null, tool_calls: [call("bash", { command: "printf 'x%.0s' $(seq 1 5000)" })] } },
+  { msg: { content: "ok" } },
+], { maxToolChars: 300 });
+const toolMsg = capped.session.messages.find((m: any) => m.role === "tool") as any;
+checks.push(["ARCODE_MAX_TOOL_CHARS caps what the model sees", toolMsg.content.length < 400 && toolMsg.content.includes("omitted")]);
+
 const offered = trunc.requests[0].tools.map((t: any) => t.function.name);
 checks.push(["web_search hidden without a search provider", !offered.includes("web_search") && offered.includes("web_fetch")]);
 

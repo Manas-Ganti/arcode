@@ -9,6 +9,7 @@ import { compact, estimateTokens } from "./context.js";
 import { defaultContextBudget } from "./models.js";
 import { Guards, noticeMessage, type Notice } from "./guards.js";
 import { detectTestCommand } from "./tools/tests.js";
+import { capToolOutput } from "./export.js";
 
 export type AgentEvent =
   | { type: "assistant_text"; text: string }
@@ -179,6 +180,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
     const ran: { call: ToolCall; ok: boolean }[] = [];
     for (const call of msg.tool_calls) {
       const result = await executeTool(call, byName, ctx, onEvent);
+      result.output = capToolOutput(result.output, config.maxToolChars);
       session.messages.push({ role: "tool", tool_call_id: call.id, content: result.output });
       await session.log({ type: "tool", name: call.function.name, args: result.args, ok: result.ok, ms: result.ms, output: result.output });
       ran.push({ call, ok: result.ok });

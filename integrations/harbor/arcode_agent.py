@@ -54,6 +54,8 @@ class ArcodeOptions(InstalledAgentOptions):
     deadline_s: float | None = Field(default=None, description="Time budget told to arcode (ARCODE_DEADLINE_S). Default: the task's agent timeout minus 30 s.")
     max_output_tokens: int | None = Field(default=None, description="Output cap per model call (ARCODE_MAX_OUTPUT_TOKENS; arcode default 16384).")
     call_timeout_s: int | None = Field(default=None, description="Time limit per model call (ARCODE_CALL_TIMEOUT_S; arcode default 300).")
+    max_tool_chars: int | None = Field(default=None, description="Cap on tool results (ARCODE_MAX_TOOL_CHARS); match the cap the evaluated model was trained with.")
+    extra_body: str | None = Field(default=None, description='JSON merged into every request (ARCODE_EXTRA_BODY), e.g. {"chat_template_kwargs":{"enable_thinking":false}}.')
     temperature: float | None = Field(default=None, description="ARCODE_TEMPERATURE (arcode default 0.2).")
     show_reasoning: bool = Field(default=False, description="Also print reasoning text to arcode.txt.")
 
@@ -171,6 +173,11 @@ class Arcode(BaseInstalledAgent):
             env["ARCODE_MAX_OUTPUT_TOKENS"] = str(self.options.max_output_tokens)
         if self.options.call_timeout_s:
             env["ARCODE_CALL_TIMEOUT_S"] = str(self.options.call_timeout_s)
+        if self.options.max_tool_chars:
+            env["ARCODE_MAX_TOOL_CHARS"] = str(self.options.max_tool_chars)
+        if self.options.extra_body:
+            json.loads(self.options.extra_body)  # fail fast on a typo, before a container starts
+            env["ARCODE_EXTRA_BODY"] = self.options.extra_body
         flags = "--show-reasoning " if self.options.show_reasoning else ""
         await self.exec_as_agent(
             environment,
