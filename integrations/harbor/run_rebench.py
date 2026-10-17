@@ -27,6 +27,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 HF_ROWS = "https://datasets-server.huggingface.co/rows?dataset=nebius/SWE-rebench-leaderboard&config=default&split={split}&offset={offset}&length=100"
+HF_SPLITS = "https://datasets-server.huggingface.co/splits?dataset=nebius/SWE-rebench-leaderboard"
 DATASET = "swe-rebench/swe-rebench-leaderboard"
 ARC_MODELS = "https://llm-api.arc.vt.edu/api/v1/models"
 
@@ -39,6 +40,15 @@ def split_ids(split: str) -> list[str]:
         ids += [row["row"]["instance_id"] for row in page["rows"]]
         if not page["rows"] or len(ids) >= page["num_rows_total"]:
             return ids
+
+
+def resolve_splits(spec: str, holdout: list[str]) -> list[str]:
+    """`train` = every monthly split (YYYY_MM) except the held-out ones; otherwise a comma list."""
+    if spec != "train":
+        return spec.split(",")
+    with urllib.request.urlopen(HF_SPLITS, timeout=60) as r:
+        names = [s["split"] for s in json.load(r)["splits"]]
+    return [s for s in names if s[:2] == "20" and s not in holdout]
 
 
 def arc_key() -> str | None:
@@ -79,7 +89,8 @@ def finished(run_dir: Path) -> set[str]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--split", default="2026_03")
+    p.add_argument("--split", default="2026_03", help="a split, a comma list, or `train` (all months except --holdout)")
+    p.add_argument("--holdout", default="2026_02,2026_03", help="months excluded by --split train (validation/test)")
     p.add_argument("--model", required=True)
     p.add_argument("--sample", type=int, help="random sample size (default: whole split)")
     p.add_argument("--seed", type=int, default=0)
@@ -96,17 +107,21 @@ def main() -> None:
     if not shutil.which("docker"):
         sys.exit("docker not found (is Docker Desktop installed and running?)")
 
-    run = a.run or f"rebench-{a.split}-{a.model}-s{a.seed}"
+    run = a.run or f"rebench-{a.split.replace(',', '+')}-{a.model}-s{a.seed}"
     run_dir = HERE / "runs" / run
     run_dir.mkdir(parents=True, exist_ok=True)
     tasks_file = run_dir / "tasks.json"
     if tasks_file.exists():
         tasks = json.loads(tasks_file.read_text())
     else:
-        tasks = split_ids(a.split)
+        splits = resolve_splits(a.split, a.holdout.split(","))
+        tasks = [t for s in splits for t in split_ids(s)]
         if a.sample and a.sample < len(tasks):
             tasks = sorted(random.Random(a.seed).sample(tasks, a.sample))
+        elif len(splits) > 1:
+            random.Random(a.seed).shuffle(tasks)  # a partial run stays representative across months
         tasks_file.write_text(json.dumps(tasks, indent=1))
+        (run_dir / "splits.json").write_text(json.dumps({"splits": splits, "holdout": a.holdout.split(",")}, indent=1))
     todo = [t for t in tasks if t not in finished(run_dir)] if a.resume else tasks
     print(f"run {run}: {len(tasks)} tasks from {a.split}, {len(todo)} to do, batches of {a.batch}, -n {a.concurrency}")
     if a.dry_run:

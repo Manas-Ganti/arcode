@@ -67,5 +67,7 @@ export async function compact(opts: {
   ];
   session.meta.compactions++;
   await session.log({ type: "compaction", removed_messages: middle.length, summary });
+  // The context was rewritten: snapshot it so the exact input of every later call can be rebuilt.
+  await session.log({ type: "context_snapshot", messages: session.messages });
   return true;
 }

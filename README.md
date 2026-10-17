@@ -151,6 +151,18 @@ Current measured results, with commits and caveats, are in [docs/RESULTS.md](doc
 
 `integrations/harbor/` runs arcode on containerized benchmarks such as Terminal-Bench 2.0 and SWE-rebench through [Harbor](https://github.com/harbor-framework/harbor). It installs your local build into each task container and brings arcode's trajectories back with the results. See [integrations/harbor/README.md](integrations/harbor/README.md).
 
+## Training data (`arcode export`)
+
+```bash
+arcode export integrations/harbor/jobs evals/results -o sft.jsonl \
+  --exclude integrations/harbor/runs/rebench-2026_03-DeepSeek-V4.1-Flash-s0/tasks.json \
+  --max-tool-chars 8000
+```
+
+Turns sessions into chat-format fine-tuning data: one JSON object per line with `messages` (OpenAI format, tool calls included, no reasoning), `tools` and `meta` (task, reward, model, turns). Rewards come from Harbor's `result.json` or from `arcode eval`'s `eval_result` event; infrastructure-interrupted runs and compacted sessions are skipped. **Always `--exclude` held-out test tasks.** `--min-reward 0` keeps failures too (e.g. for preference data). Use the same `--max-tool-chars` cap when evaluating a model trained on the output.
+
+Generating training trajectories on SWE-rebench months that don't overlap the test sample: `python3 integrations/harbor/run_rebench.py --split train --model DeepSeek-V4.1-Flash --batch 10 -n 2` (all monthly splits except `--holdout 2026_02,2026_03`, seeded shuffle, resumable).
+
 ## Tests
 
 ```bash

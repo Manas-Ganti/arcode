@@ -16,7 +16,7 @@
     "probe": "tsx scripts/probe-arc.ts",
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts && tsx scripts/mock-mcp.ts && tsx scripts/mock-guards.ts"
+    "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts && tsx scripts/mock-mcp.ts && tsx scripts/mock-guards.ts && tsx scripts/mock-export.ts"
   },
   "license": "MIT",
   "engines": {

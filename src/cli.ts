@@ -8,6 +8,7 @@ import { Session } from "./session.js";
 import { runAgent, type AgentEvent } from "./agent.js";
 import { compact } from "./context.js";
 import { evalMain } from "./eval/main.js";
+import { exportMain } from "./export.js";
 import { MarkdownStream, renderMarkdown } from "./markdown.js";
 import { isModelHotkey, pickFromList } from "./picker.js";
 import { expandCommand, loadCommands, parseSlash, shellContext } from "./commands.js";
@@ -34,6 +35,7 @@ Usage:
   arcode --sessions              list sessions
   arcode --models                list models available on the endpoint
   arcode eval --help             score the agent on test-graded tasks
+  arcode export --help           turn sessions into fine-tuning data
 
 Options:
   -m, --model <id>               model id (or ARCODE_MODEL)
@@ -183,6 +185,7 @@ function renderer(showReasoning: boolean) {
 
 async function main() {
   if (process.argv[2] === "eval") return evalMain(process.argv.slice(3));
+  if (process.argv[2] === "export") return exportMain(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(HELP);
 

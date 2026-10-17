@@ -71,6 +71,8 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
 
   if (session.messages.length === 0) {
     session.messages.push({ role: "system", content: await buildSystemPrompt(config, tools) });
+    // Logged once, with the tool specs, so trajectories are self-contained training data.
+    await session.log({ type: "system_prompt", content: session.messages[0].content, tools: specs });
   }
   session.messages.push({ role: "user", content: userInput });
   await session.log({ type: "user", content: userInput });
@@ -153,6 +155,7 @@ export async function runAgent(userInput: string, opts: AgentOptions): Promise<s
 
     // Cut off by the output cap with nothing actionable: discard it rather than treat it as the answer.
     if (res.finishReason === "length" && !msg.tool_calls?.length) {
+      await session.log({ type: "discarded", reason: "truncated", turn: session.meta.turns });
       await notify(guards.truncated());
       continue;
     }
