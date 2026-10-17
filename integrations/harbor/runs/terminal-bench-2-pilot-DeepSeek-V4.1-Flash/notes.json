@@ -1,0 +1,13 @@
+{
+ "dataset": "terminal-bench/terminal-bench-2",
+ "model": "DeepSeek-V4.1-Flash",
+ "date": "2026-10-15",
+ "harness_commits": {
+  "fix-git": "e68953a",
+  "other 10": "e68953a (before guards)"
+ },
+ "selection": "hand-picked pilot: 4 easy / 5 medium / 2 hard, skipping the heaviest builds; not representative of the 89-task set",
+ "excluded": {
+  "adaptive-rejection-sampler": "first attempt cut off when the run was stopped; re-run hit ARC 403 (off the VT VPN), so no valid attempt"
+ }
+}

@@ -17,6 +17,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+# Trials stopped by the infrastructure, not the agent: no result, rather than a 0.
+# (AgentTimeoutError is the task's own time limit, so it stays a genuine failure.)
+INVALID = ("CancelledError", "Environment")
+
+
+def invalid(r: dict) -> bool:
+    exc = (r.get("exception_info") or {}).get("exception_type") or ""
+    return exc.startswith(INVALID)
+
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     if n == 0:
@@ -34,7 +43,7 @@ def main() -> None:
     for job in json.loads((run_dir / "jobs.json").read_text()):
         for res in (HERE / "jobs" / job).glob("*/result.json"):
             r = json.loads(res.read_text())
-            if "task_name" not in r or not r.get("finished_at"):
+            if "task_name" not in r or not r.get("finished_at") or invalid(r):
                 continue
             task = r["task_name"].split("/", 1)[1]
             if task not in latest or r["finished_at"] > latest[task][0]:

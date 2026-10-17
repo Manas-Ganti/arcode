@@ -1,0 +1,124 @@
+{
+ "resolved": 7,
+ "n": 10,
+ "ci95": [
+  0.39677321997956516,
+  0.892210712513788
+ ],
+ "rows": [
+  {
+   "task": "fix-git",
+   "resolved": true,
+   "status": "done",
+   "turns": 12,
+   "input_tokens": 58989,
+   "output_tokens": 2180,
+   "agent_seconds": 34.238115,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "overfull-hbox",
+   "resolved": true,
+   "status": "done",
+   "turns": 26,
+   "input_tokens": 301507,
+   "output_tokens": 17552,
+   "agent_seconds": 597.728574,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "cobol-modernization",
+   "resolved": false,
+   "status": "running",
+   "turns": 39,
+   "input_tokens": 747572,
+   "output_tokens": 48991,
+   "agent_seconds": 900.011847,
+   "exception": "AgentTimeoutError",
+   "notices": {}
+  },
+  {
+   "task": "prove-plus-comm",
+   "resolved": true,
+   "status": "done",
+   "turns": 11,
+   "input_tokens": 29351,
+   "output_tokens": 2745,
+   "agent_seconds": 44.47563,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "build-pmars",
+   "resolved": true,
+   "status": "done",
+   "turns": 23,
+   "input_tokens": 277438,
+   "output_tokens": 5562,
+   "agent_seconds": 103.252132,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "chess-best-move",
+   "resolved": false,
+   "status": "running",
+   "turns": 20,
+   "input_tokens": 170699,
+   "output_tokens": 21502,
+   "agent_seconds": 900.00009,
+   "exception": "AgentTimeoutError",
+   "notices": {}
+  },
+  {
+   "task": "crack-7z-hash",
+   "resolved": true,
+   "status": "done",
+   "turns": 13,
+   "input_tokens": 59510,
+   "output_tokens": 1750,
+   "agent_seconds": 445.757559,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "count-dataset-tokens",
+   "resolved": false,
+   "status": "running",
+   "turns": 33,
+   "input_tokens": 354943,
+   "output_tokens": 22256,
+   "agent_seconds": 899.999162,
+   "exception": "AgentTimeoutError",
+   "notices": {}
+  },
+  {
+   "task": "adaptive-rejection-sampler",
+   "missing": true
+  },
+  {
+   "task": "cancel-async-tasks",
+   "resolved": true,
+   "status": "done",
+   "turns": 12,
+   "input_tokens": 84502,
+   "output_tokens": 57714,
+   "agent_seconds": 897.620178,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "fix-code-vulnerability",
+   "resolved": true,
+   "status": "done",
+   "turns": 19,
+   "input_tokens": 184670,
+   "output_tokens": 5570,
+   "agent_seconds": 105.216359,
+   "exception": null,
+   "notices": {}
+  }
+ ]
+}
