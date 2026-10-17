@@ -1,0 +1,568 @@
+{
+ "resolved": 44,
+ "n": 50,
+ "ci95": [
+  0.7619492111337642,
+  0.9438247628937535
+ ],
+ "rows": [
+  {
+   "task": "aallan__vera-662_interface",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1654575,
+   "output_tokens": 17232,
+   "agent_seconds": 302.06207,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "apache__iceberg-python-3295",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1486428,
+   "output_tokens": 17665,
+   "agent_seconds": 2672.729885,
+   "exception": null,
+   "notices": {
+    "deadline": 1
+   }
+  },
+  {
+   "task": "conan-io__conan-19735_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 15,
+   "input_tokens": 110757,
+   "output_tokens": 2559,
+   "agent_seconds": 59.041078,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "copier-org__copier-2646",
+   "resolved": true,
+   "status": "done",
+   "turns": 41,
+   "input_tokens": 915313,
+   "output_tokens": 9429,
+   "agent_seconds": 2438.110741,
+   "exception": null,
+   "notices": {
+    "deadline": 1
+   }
+  },
+  {
+   "task": "cpp-linter__cpp-linter-hooks-206_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 24,
+   "input_tokens": 358510,
+   "output_tokens": 7280,
+   "agent_seconds": 111.733856,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "delgan__loguru-1451",
+   "resolved": true,
+   "status": "done",
+   "turns": 43,
+   "input_tokens": 1587610,
+   "output_tokens": 29233,
+   "agent_seconds": 660.827963,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "deltares__hydrolib-core-1049_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 37,
+   "input_tokens": 488003,
+   "output_tokens": 12749,
+   "agent_seconds": 275.061185,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "destine-climate-dt__aqua-2768",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1981380,
+   "output_tokens": 48529,
+   "agent_seconds": 1074.762877,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "getmoto__moto-9903",
+   "resolved": true,
+   "status": "done",
+   "turns": 29,
+   "input_tokens": 306101,
+   "output_tokens": 6559,
+   "agent_seconds": 201.715598,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "hiero-ledger__hiero-sdk-python-1914_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 52,
+   "input_tokens": 1795915,
+   "output_tokens": 30855,
+   "agent_seconds": 634.307129,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "holoviz__param-1117",
+   "resolved": true,
+   "status": "done",
+   "turns": 53,
+   "input_tokens": 1815844,
+   "output_tokens": 24743,
+   "agent_seconds": 469.837041,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "huggingface__huggingface_hub-4056",
+   "resolved": true,
+   "status": "done",
+   "turns": 50,
+   "input_tokens": 1301576,
+   "output_tokens": 13264,
+   "agent_seconds": 339.93527,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "itsdnns__docsight-437",
+   "resolved": false,
+   "status": "done",
+   "turns": 58,
+   "input_tokens": 3147222,
+   "output_tokens": 39977,
+   "agent_seconds": 986.932791,
+   "exception": null,
+   "notices": {
+    "loop": 1
+   }
+  },
+  {
+   "task": "keras-team__keras-22330",
+   "resolved": true,
+   "status": "done",
+   "turns": 52,
+   "input_tokens": 1796062,
+   "output_tokens": 21538,
+   "agent_seconds": 598.554887,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "keras-team__keras-22642",
+   "resolved": true,
+   "status": "done",
+   "turns": 46,
+   "input_tokens": 887928,
+   "output_tokens": 14060,
+   "agent_seconds": 331.619357,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "koxudaxi__datamodel-code-generator-3070",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 2260909,
+   "output_tokens": 46312,
+   "agent_seconds": 819.118577,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "macbre__sql-metadata-625_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 52,
+   "input_tokens": 1580446,
+   "output_tokens": 18852,
+   "agent_seconds": 357.095561,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "marshmallow-code__marshmallow-2925_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 50,
+   "input_tokens": 890428,
+   "output_tokens": 11522,
+   "agent_seconds": 236.220273,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "meltano__meltano-9929",
+   "resolved": true,
+   "status": "done",
+   "turns": 41,
+   "input_tokens": 1131735,
+   "output_tokens": 12860,
+   "agent_seconds": 896.735888,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "mempalace__mempalace-1004",
+   "resolved": true,
+   "status": "done",
+   "turns": 43,
+   "input_tokens": 1341043,
+   "output_tokens": 41727,
+   "agent_seconds": 2539.643542,
+   "exception": null,
+   "notices": {
+    "deadline": 1
+   }
+  },
+  {
+   "task": "microsoft__qcodes-8039",
+   "resolved": true,
+   "status": "done",
+   "turns": 34,
+   "input_tokens": 569008,
+   "output_tokens": 11930,
+   "agent_seconds": 558.164318,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "nesquena__hermes-webui-1818",
+   "resolved": false,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 4361882,
+   "output_tokens": 57646,
+   "agent_seconds": 1136.800851,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "nesquena__hermes-webui-2056",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 3008947,
+   "output_tokens": 99748,
+   "agent_seconds": 2043.780015,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pallets-eco__wtforms-892_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 38,
+   "input_tokens": 1144138,
+   "output_tokens": 11713,
+   "agent_seconds": 193.751993,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pallets__click-3239",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 2380214,
+   "output_tokens": 20729,
+   "agent_seconds": 385.205422,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pennylaneai__pennylane-9298",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 2540078,
+   "output_tokens": 54975,
+   "agent_seconds": 922.553287,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pgmpy__pgmpy-3137",
+   "resolved": true,
+   "status": "done",
+   "turns": 47,
+   "input_tokens": 1816516,
+   "output_tokens": 41733,
+   "agent_seconds": 1232.043008,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pipecat-ai__pipecat-4283",
+   "resolved": true,
+   "status": "done",
+   "turns": 22,
+   "input_tokens": 739166,
+   "output_tokens": 13257,
+   "agent_seconds": 324.516727,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pycqa__isort-2491",
+   "resolved": true,
+   "status": "done",
+   "turns": 43,
+   "input_tokens": 1087116,
+   "output_tokens": 40967,
+   "agent_seconds": 567.668381,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pypa__build-1027",
+   "resolved": true,
+   "status": "done",
+   "turns": 51,
+   "input_tokens": 1187365,
+   "output_tokens": 12664,
+   "agent_seconds": 432.737639,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "pypsa__pypsa-1653",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1906849,
+   "output_tokens": 39124,
+   "agent_seconds": 682.528494,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "python-scim__scim2-models-139_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 55,
+   "input_tokens": 2688424,
+   "output_tokens": 14587,
+   "agent_seconds": 213.305167,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "python-wheel-build__fromager-1106",
+   "resolved": true,
+   "status": "done",
+   "turns": 34,
+   "input_tokens": 508932,
+   "output_tokens": 12417,
+   "agent_seconds": 206.51014,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "raullenchai__rapid-mlx-228",
+   "resolved": false,
+   "status": "done",
+   "turns": 4,
+   "input_tokens": 25391,
+   "output_tokens": 534,
+   "agent_seconds": 11.146724,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "reframe-hpc__reframe-3660_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 39,
+   "input_tokens": 818678,
+   "output_tokens": 10967,
+   "agent_seconds": 526.712587,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "schemathesis__schemathesis-3778",
+   "resolved": false,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 2593247,
+   "output_tokens": 48411,
+   "agent_seconds": 881.929884,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "scikit-learn__scikit-learn-33565",
+   "resolved": true,
+   "status": "done",
+   "turns": 25,
+   "input_tokens": 527315,
+   "output_tokens": 8289,
+   "agent_seconds": 223.18352,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "sigma67__ytmusicapi-909_interface",
+   "resolved": false,
+   "status": "done",
+   "turns": 39,
+   "input_tokens": 1097873,
+   "output_tokens": 9134,
+   "agent_seconds": 248.218551,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "sqlfluff__sqlfluff-7617",
+   "resolved": true,
+   "status": "done",
+   "turns": 46,
+   "input_tokens": 1451744,
+   "output_tokens": 19981,
+   "agent_seconds": 552.193939,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "sqlfluff__sqlfluff-7622",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1767082,
+   "output_tokens": 29069,
+   "agent_seconds": 525.620311,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "stanfordnlp__dspy-9478_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 51,
+   "input_tokens": 751773,
+   "output_tokens": 10849,
+   "agent_seconds": 178.908184,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "sunpy__sunpy-8548_interface",
+   "resolved": true,
+   "status": "done",
+   "turns": 53,
+   "input_tokens": 1399778,
+   "output_tokens": 15413,
+   "agent_seconds": 263.105944,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "tobymao__sqlglot-7187",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 1853289,
+   "output_tokens": 28071,
+   "agent_seconds": 423.56506,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "tobymao__sqlglot-7479",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 2218240,
+   "output_tokens": 18386,
+   "agent_seconds": 373.769453,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "tox-dev__tox-3846",
+   "resolved": true,
+   "status": "done",
+   "turns": 27,
+   "input_tokens": 469576,
+   "output_tokens": 6455,
+   "agent_seconds": 257.639451,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "tox-dev__tox-3904",
+   "resolved": true,
+   "status": "max_turns",
+   "turns": 60,
+   "input_tokens": 3493983,
+   "output_tokens": 27050,
+   "agent_seconds": 581.618386,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "unit8co__darts-3065",
+   "resolved": true,
+   "status": "done",
+   "turns": 31,
+   "input_tokens": 695192,
+   "output_tokens": 22793,
+   "agent_seconds": 334.259096,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "youssofal__mtplx-21",
+   "resolved": true,
+   "status": "done",
+   "turns": 58,
+   "input_tokens": 1892253,
+   "output_tokens": 71113,
+   "agent_seconds": 1192.149895,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "zarr-developers__virtualizarr-979",
+   "resolved": true,
+   "status": "done",
+   "turns": 50,
+   "input_tokens": 1831735,
+   "output_tokens": 19659,
+   "agent_seconds": 314.912579,
+   "exception": null,
+   "notices": {}
+  },
+  {
+   "task": "zauberzeug__nicegui-5914",
+   "resolved": false,
+   "status": "done",
+   "turns": 44,
+   "input_tokens": 1811562,
+   "output_tokens": 29440,
+   "agent_seconds": 655.373199,
+   "exception": null,
+   "notices": {}
+  }
+ ]
+}
