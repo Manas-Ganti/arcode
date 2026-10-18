@@ -19,6 +19,11 @@ How it works:
 - arcode's exit code (non-zero on max_turns/error) is recorded but doesn't fail the
   trial: the task's own tests decide pass/fail.
 
+On HPC (Apptainer/Singularity, e.g. VT ARC): set ARCODE_RUNTIME to the path *inside the
+container* where a prebuilt Node + arcode is bind-mounted (integrations/harbor/arc/setup.sh builds
+it; the job binds it read-only via APPTAINER_BIND). install() then copies nothing and downloads
+nothing: Apptainer's writable overlay is small, and Node alone is ~200 MB.
+
 API key: ARC_API_KEY (or VTARC_API_KEY) from the environment Harbor runs in, else
 from ~/.arcode/.env, the same place arcode reads it. Set ARC_BASE_URL to use
 another OpenAI-compatible endpoint.
@@ -47,6 +52,14 @@ ARCODE_ROOT = Path(__file__).resolve().parents[2]
 REMOTE_TARBALL = "/installed-agent/arcode.tgz"
 REMOTE_HOME = "/logs/agent/arcode"  # under /logs/agent, which Harbor syncs to the host
 NVM = 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"'
+RUNTIME = os.environ.get("ARCODE_RUNTIME")  # container path of a bind-mounted Node + arcode (HPC mode)
+
+
+def _path_setup() -> str:
+    """Shell prefix that puts node and arcode on PATH, for either install mode."""
+    if RUNTIME:
+        return f'export PATH="{RUNTIME}/node/bin:{RUNTIME}/prefix/bin:$PATH"'
+    return NVM
 
 
 class ArcodeOptions(InstalledAgentOptions):
@@ -88,6 +101,8 @@ class Arcode(BaseInstalledAgent):
 
     @override
     def get_version_command(self) -> str | None:
+        if RUNTIME:
+            return f"{_path_setup()}; node -p \"'arcode@' + require('{RUNTIME}/prefix/lib/node_modules/arcode/package.json').version\""
         return f"{NVM}; npm ls -g arcode --depth=0 | grep -o 'arcode@[0-9.]*'"
 
     # ---------------------------------------------------------------- install
@@ -107,6 +122,15 @@ class Arcode(BaseInstalledAgent):
 
     @override
     async def install(self, environment: BaseEnvironment) -> None:
+        if RUNTIME:
+            # The SWE-rebench Dockerfile adds uv and /logs on top of the image; with Apptainer the
+            # image runs as pulled, so restore those two (uv comes from the runtime dir).
+            await self.exec_as_root(
+                environment,
+                command=(f"mkdir -p /logs; command -v uv >/dev/null || cp {RUNTIME}/extra/uv /usr/local/bin/uv 2>/dev/null || true; "
+                         f"{_path_setup()}; node --version && arcode --help > /dev/null"),
+            )
+            return
         await self.ensure_system_dependencies(environment, ("curl",))
         await self.exec_as_agent(environment, command=f"set -euo pipefail; {nvm_node_install_snippet(DEFAULT_NODE_MAJOR)}")
         await environment.upload_file(self._build_tarball(), REMOTE_TARBALL)
@@ -139,8 +163,11 @@ class Arcode(BaseInstalledAgent):
         """
         try:
             trial = json.loads((self.logs_dir.parent / "config.json").read_text())
-            name, ref = trial["task"]["name"], trial["task"]["ref"].removeprefix("sha256:")
-            toml_path = Path.home() / ".cache" / "harbor" / "tasks" / "packages" / name / ref / "task.toml"
+            if trial["task"].get("path"):  # a local task dir (the HPC pipeline converts tasks locally)
+                toml_path = Path(trial["task"]["path"]) / "task.toml"
+            else:
+                name, ref = trial["task"]["name"], trial["task"]["ref"].removeprefix("sha256:")
+                toml_path = Path.home() / ".cache" / "harbor" / "tasks" / "packages" / name / ref / "task.toml"
             timeout = tomllib.loads(toml_path.read_text())["agent"]["timeout_sec"]
             agent_cfg = trial.get("agent") or {}
             timeout = agent_cfg.get("override_timeout_sec") or timeout
@@ -182,7 +209,7 @@ class Arcode(BaseInstalledAgent):
         await self.exec_as_agent(
             environment,
             command=(
-                f"{NVM}; mkdir -p {REMOTE_HOME}; "
+                f"{_path_setup()}; mkdir -p {REMOTE_HOME}; "
                 f"arcode -p {shlex.quote(instruction)} --yes {flags}-m {shlex.quote(self._model())} "
                 f"2>&1 | tee /logs/agent/arcode.txt; "
                 f"echo ${{PIPESTATUS[0]}} > /logs/agent/arcode-exit-code; exit 0"

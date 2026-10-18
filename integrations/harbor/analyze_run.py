@@ -18,13 +18,19 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 # Trials stopped by the infrastructure, not the agent: no result, rather than a 0.
-# (AgentTimeoutError is the task's own time limit, so it stays a genuine failure.)
+# (AgentTimeoutError is the task's own time limit, so it stays a genuine failure: the verifier
+# still grades it.) A trial the verifier never graded (Docker died, container never started)
+# is no result either, whatever the exception is called.
 INVALID = ("CancelledError", "Environment")
+
+
+def graded(r: dict) -> bool:
+    return (r.get("verifier_result") or {}).get("rewards", {}).get("reward") is not None
 
 
 def invalid(r: dict) -> bool:
     exc = (r.get("exception_info") or {}).get("exception_type") or ""
-    return exc.startswith(INVALID)
+    return exc.startswith(INVALID) or not graded(r)
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -63,7 +69,10 @@ def main() -> None:
         notices = collections.Counter()
         for traj in trial.glob("agent/arcode/sessions/*/trajectory.jsonl"):
             for line in traj.read_text().splitlines():
-                e = json.loads(line)
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # a run killed mid-write leaves a partial last line
                 if e.get("type") == "notice":
                     notices[e["kind"]] += 1
         rows.append({

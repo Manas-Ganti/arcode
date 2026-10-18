@@ -1,6 +1,7 @@
 """
 Check the arcode Harbor adapter without Docker: import, options, credentials,
-packaging, a clean install of the tarball, and result parsing.
+packaging, a clean install of the tarball, result parsing, and the HPC (Apptainer)
+pieces: runtime mode, task conversion, deadline from a local task, resume rules.
 
     $(uv tool dir)/harbor/bin/python integrations/harbor/check_adapter.py
 """
@@ -13,6 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import arcode_agent as m  # noqa: E402
+import run_rebench as rr  # noqa: E402
+import tomllib  # noqa: E402
 from harbor.models.agent.context import AgentContext  # noqa: E402
 
 checks: list[tuple[str, bool]] = []
@@ -42,6 +45,46 @@ with tempfile.TemporaryDirectory() as tmp:
     ctx = AgentContext()
     a.populate_context_post_run(ctx)
     checks.append(("results parsed from synced session", ctx.n_input_tokens == 1200 and ctx.metadata["arcode_status"] == "max_turns" and ctx.metadata["arcode_exit_code"] == "1"))
+
+    # ---- HPC mode (VT ARC, Apptainer): runtime bind instead of nvm, converted local tasks
+    m.RUNTIME = "/opt/arcode-rt"
+    checks.append(("runtime mode: node + arcode from the bound dir, no nvm", "/opt/arcode-rt/node/bin" in m._path_setup() and "nvm" not in m._path_setup()
+                   and "package.json" in (a.get_version_command() or "")))
+    m.RUNTIME = None
+    checks.append(("default mode still uses nvm", "nvm.sh" in m._path_setup()))
+
+    src = Path(tmp) / "raw" / "demo__repo-1"
+    (src / "environment").mkdir(parents=True)
+    (src / "tests").mkdir()
+    (src / "environment" / "Dockerfile").write_text("FROM swerebench/sweb.eval.x86_64.demo_1776_repo-1:latest\nRUN mkdir -p /logs\n")
+    (src / "task.toml").write_text('[task]\nname = "swe-rebench/demo__repo-1"\n\n[agent]\ntimeout_sec = 3000\n\n[environment]\ncpus = 1\nmemory = \'8G\'\n')
+    dst = Path(tmp) / "batch" / "demo__repo-1"
+    rr.convert_task(src, dst)
+    conv = tomllib.loads((dst / "task.toml").read_text())
+    checks.append(("convert_task: image into task.toml, workdir /testbed, rest kept",
+                   conv["environment"]["docker_image"] == "swerebench/sweb.eval.x86_64.demo_1776_repo-1:latest"
+                   and conv["environment"]["memory"] == "8G" and conv["task"]["name"] == "swe-rebench/demo__repo-1"
+                   and (dst / "environment" / "Dockerfile").read_text().splitlines()[-1] == "WORKDIR /testbed"
+                   and (dst / "tests").is_dir()))
+    rr.convert_task(src, dst)  # idempotent
+    checks.append(("convert_task: re-running doesn't duplicate docker_image", (dst / "task.toml").read_text().count("docker_image") == 1))
+
+    trial = Path(tmp) / "trial"
+    (trial / "agent").mkdir(parents=True)
+    (trial / "config.json").write_text(json.dumps({"task": {"path": str(dst), "source": "b1"}, "agent": {}}))
+    checks.append(("deadline read from a local task path", m.Arcode(logs_dir=trial / "agent", model_name="x")._task_deadline() == 2970))
+
+    rr.HERE = Path(tmp)
+    run = Path(tmp) / "run"
+    run.mkdir()
+    (run / "jobs.json").write_text(json.dumps(["J"]))
+    for t, res in {"graded-fail": {"verifier_result": {"rewards": {"reward": 0.0}}},
+                   "graded-pass": {"verifier_result": {"rewards": {"reward": 1.0}}, "exception_info": {"exception_type": "AgentTimeoutError"}},
+                   "docker-died": {"verifier_result": None, "exception_info": {"exception_type": "RuntimeError"}},
+                   "cancelled": {"exception_info": {"exception_type": "CancelledError"}}}.items():
+        (Path(tmp) / "jobs" / "J" / t).mkdir(parents=True)
+        (Path(tmp) / "jobs" / "J" / t / "result.json").write_text(json.dumps({"task_name": f"swe-rebench/{t}", "finished_at": "2026-10-17T00:00:00", **res}))
+    checks.append(("resume: graded trials are done, ungraded ones are retried", rr.finished(run) == {"graded-fail", "graded-pass"}))
 
 for name, ok in checks:
     print(f"{'PASS' if ok else 'FAIL'}  {name}")

@@ -12,3 +12,4 @@ __pycache__/
 *.pyc
 integrations/harbor/jobs/
 training/data/
+integrations/harbor/arc-tasks/

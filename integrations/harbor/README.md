@@ -45,6 +45,8 @@ python3 run_rebench.py --split 2026_03 --model DeepSeek-V4.1-Flash --sample 50 -
 python3 run_rebench.py ... --resume      # continue an interrupted run, skipping finished tasks
 ```
 
+On VT ARC (no Docker), `--backend singularity` runs the same thing in Apptainer: see [`arc/README.md`](arc/README.md).
+
 It checks the ARC endpoint before starting and after every batch (403 = off the VT network), saves the task list and job names under `runs/<run>/`, and only removes images the batch itself added. Splits so far: `2025_01` ... `2026_03` (110 tasks, issues from March to May 2026); `test` is the whole set. Note the newest split predates some current models, so it isn't guaranteed contamination-free for them.
 
 ## What the adapter does

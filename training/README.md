@@ -8,7 +8,9 @@ teacher (ARC API) --arcode + Harbor--> trajectories + rewards --arcode export-->
   --serve.slurm (vLLM)--> arcode benchmark: base vs sft on held-out SWE-rebench tasks
 ```
 
-## 1. Data (on your Mac)
+## 1. Data
+
+Generation runs on ARC: see [`integrations/harbor/arc/README.md`](../integrations/harbor/arc/README.md) (Apptainer instead of Docker, one resumable SLURM job, export on ARC). On a Mac with Docker, the same steps are:
 
 ```bash
 # Training trajectories (resumable; months 2025_01..2026_01, test months held out)
