@@ -9,6 +9,7 @@ import { runAgent, type AgentEvent } from "./agent.js";
 import { compact } from "./context.js";
 import { evalMain } from "./eval/main.js";
 import { exportMain } from "./export.js";
+import { setupMain } from "./setup.js";
 import { MarkdownStream, renderMarkdown } from "./markdown.js";
 import { isModelHotkey, pickFromList } from "./picker.js";
 import { expandCommand, loadCommands, parseSlash, shellContext } from "./commands.js";
@@ -34,6 +35,7 @@ Usage:
   arcode --resume <id>           resume a specific session
   arcode --sessions              list sessions
   arcode --models                list models available on the endpoint
+  arcode setup                   choose a provider and save its API key (--help for flags)
   arcode eval --help             score the agent on test-graded tasks
   arcode export --help           turn sessions into fine-tuning data
 
@@ -43,7 +45,7 @@ Options:
   --show-reasoning               print model reasoning text when present
   --max-turns <n>                cap on agent turns per task
 
-Env (or ~/.arcode/.env): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
+Env (or ~/.arcode/.env, written by arcode setup): ARC_API_KEY, ARC_BASE_URL, ARCODE_MODEL, ARCODE_EXTRA_BODY, BRAVE_API_KEY | TAVILY_API_KEY | SEARXNG_URL
 
 In the REPL: /plan  /notes  /compact  /model [n|id]  /session  /commands  /mcp  /help  exit (or /exit, Ctrl+D)
   !<command>   run a shell command directly; its output goes to the model with your next message
@@ -186,6 +188,7 @@ function renderer(showReasoning: boolean) {
 async function main() {
   if (process.argv[2] === "eval") return evalMain(process.argv.slice(3));
   if (process.argv[2] === "export") return exportMain(process.argv.slice(3));
+  if (process.argv[2] === "setup") return void (await setupMain(process.argv.slice(3)));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(HELP);
 
@@ -201,7 +204,13 @@ async function main() {
     }
     return;
   }
-  if (!cfg.apiKey) throw new Error("ARC_API_KEY is not set: put it in ~/.arcode/.env or the environment (get one at llm.arc.vt.edu > Settings > Account > API keys)");
+  if (!cfg.apiKey && stdin.isTTY && stdout.isTTY && typeof args.prompt !== "string") {
+    // First run: walk through setup, then carry on with what it saved.
+    console.log(c.yellow("No API key configured yet. Let's set one up (re-run any time with `arcode setup`).\n"));
+    for (const [k, v] of Object.entries(await setupMain([]))) if (v !== undefined) process.env[k] = v;
+    Object.assign(cfg, loadConfig({ autoApprove: cfg.autoApprove, maxTurns: cfg.maxTurns, ...(typeof args.model === "string" ? { model: args.model, summaryModel: args.model } : {}) }));
+  }
+  if (!cfg.apiKey) throw new Error("no API key configured: run `arcode setup` (or set ARC_API_KEY in ~/.arcode/.env or the environment)");
   if (args.models) return console.log((await new LLM(cfg.baseUrl, cfg.apiKey).listModels()).join("\n"));
 
   // Resume or start fresh.

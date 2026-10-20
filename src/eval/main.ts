@@ -38,7 +38,7 @@ export async function evalMain(argv: string[]): Promise<void> {
 
   loadEnvFile();
   const cfg = loadConfig();
-  if (!cfg.apiKey) throw new Error("ARC_API_KEY is not set (~/.arcode/.env)");
+  if (!cfg.apiKey) throw new Error("no API key configured: run `arcode setup` (or set ARC_API_KEY in ~/.arcode/.env)");
   const requested = typeof a.models === "string" ? a.models.split(",") : cfg.model ? [cfg.model] : [];
   if (!requested.length) throw new Error(`pass --models\n\n${EVAL_HELP}`);
   // Catch typos before spending a run on them.

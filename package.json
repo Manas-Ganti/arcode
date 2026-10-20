@@ -16,11 +16,12 @@
     "probe": "tsx scripts/probe-arc.ts",
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts && tsx scripts/mock-mcp.ts && tsx scripts/mock-guards.ts && tsx scripts/mock-export.ts"
+    "setup": "tsx src/cli.ts setup",
+    "test:mock": "tsx scripts/mock-e2e.ts && tsx scripts/mock-eval.ts && tsx scripts/mock-mcp.ts && tsx scripts/mock-guards.ts && tsx scripts/mock-export.ts && tsx scripts/mock-setup.ts"
   },
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -17,6 +17,7 @@ src/
   picker.ts     arrow-key list picker (model selection, Ctrl+O)
   markdown.ts   markdown → ANSI styling for terminal replies (line-based, stream-aware)
   config.ts     env-driven config (+ $ARCODE_HOME/.env)
+  setup.ts      `arcode setup`: provider + API key → $ARCODE_HOME/.env, verified against /models
   models.ts     per-model context window and request params, matched by id prefix
   tools/
     fs.ts       read_file, edit_file, write_file, list_dir, grep (workspace-confined)

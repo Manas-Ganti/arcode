@@ -16,7 +16,7 @@ import { loadConfig, loadEnvFile } from "../src/config.js";
 loadEnvFile();
 const cfg = loadConfig();
 if (!cfg.apiKey) {
-  console.error("Set ARC_API_KEY first (llm.arc.vt.edu > Settings > Account > API keys).");
+  console.error("No API key configured: run `npm run setup` (or set ARC_API_KEY in ~/.arcode/.env).");
   process.exit(1);
 }
 const llm = new LLM(cfg.baseUrl, cfg.apiKey, cfg.extraBody);

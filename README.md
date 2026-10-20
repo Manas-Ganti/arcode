@@ -7,46 +7,62 @@ A minimal, readable coding agent for any OpenAI-compatible endpoint. Built again
 - **Task memory**: a plan (`todo_write`) and notes (`note`) that survive context compaction and session resume
 - **Context compaction**: older turns get summarized and recent turns stay verbatim, with tool-call pairs kept intact
 - **Trajectory logging**: every model call and tool result goes to an append-only JSONL file per session, ready for evaluation or RL training data
-- **Zero runtime dependencies**: Node 20+ only
+- **Zero runtime dependencies**: Node 20.12+ only
 
 ## Setup
 
-You need Node 20+ and an API key for an OpenAI-compatible endpoint. arcode is built for **Virginia Tech ARC's hosted models** (free for VT accounts), but any `/v1/chat/completions` endpoint works.
+You need **Node 20.12+** and an API key for an OpenAI-compatible endpoint. arcode is built for **Virginia Tech ARC's hosted models** (free for VT accounts), and works the same with OpenAI, OpenRouter, DeepSeek, Groq, Together, a local vLLM/Ollama server, or any other `/v1/chat/completions` endpoint.
 
-**1. Install**
-
-```bash
-git clone https://github.com/Manas-Ganti/arcode.git && cd arcode
-npm install
-npm run build && npm link      # optional: puts an `arcode` command on your PATH
-```
-
-**2. Get an ARC API key**
-
-Sign in at [llm.arc.vt.edu](https://llm.arc.vt.edu) with your VT account, then open your profile > **Settings > Account > API keys** and create a key. One key works for every model ARC hosts (GLM, DeepSeek, gpt-oss, ...); you pick the model inside arcode.
-
-**3. Put the key where arcode reads it: `~/.arcode/.env`**
+**One command (macOS / Linux):**
 
 ```bash
-mkdir -p ~/.arcode && cp .env.example ~/.arcode/.env && chmod 600 ~/.arcode/.env
-# then edit ~/.arcode/.env and replace sk-your-key-here with your key
+git clone https://github.com/Manas-Ganti/arcode.git && cd arcode && ./install.sh
 ```
 
-**4. Check it works**
+`install.sh` checks your Node version, installs dev dependencies, builds, puts an `arcode` command on your PATH (with `npm link`, or a link in `~/.local/bin` if the global npm folder isn't writable), and then runs `arcode setup`. Re-run it after `git pull` to rebuild; it skips the key prompt once a key is saved. `./install.sh --no-setup` skips the prompt.
+
+On Windows (or to do it by hand): `npm install && npm run build && npm link && arcode setup`.
+
+### Adding your API key: `arcode setup`
+
+```
+$ arcode setup
+Which provider?
+› VT ARC (GLM, DeepSeek, gpt-oss; free for VT accounts)
+  OpenAI
+  OpenRouter (many providers, one key)
+  DeepSeek · Groq · Together AI
+  Local server (vLLM, Ollama, LM Studio, llama.cpp)
+  Other OpenAI-compatible endpoint
+API key:                      (hidden as you type)
+Checking… ok, 14 models available
+Default model? (or choose each time arcode starts)
+Saved to ~/.arcode/.env. Start with: arcode
+```
+
+Setup checks the key against the endpoint's `/models` before saving, so a typo shows up now instead of on your first task. Run it again any time to switch provider or key; `arcode setup --show` prints the current settings with the key masked. If you start `arcode` with no key configured, it runs setup for you.
+
+Where to get a key: **VT ARC**: sign in at [llm.arc.vt.edu](https://llm.arc.vt.edu) with your VT account, then profile > **Settings > Account > API keys** (one key covers every ARC model). Other providers: setup prints the link for the one you pick.
+
+Non-interactive (CI, cluster jobs, dotfiles):
 
 ```bash
-npm run probe        # lists the endpoint's models and checks chat + tool calling for each
+echo "$MY_KEY" | arcode setup --provider openrouter --model deepseek/deepseek-chat   # key on stdin stays out of shell history
+arcode setup --base-url http://localhost:11434/v1 --provider local --no-verify        # local server, no key
+arcode setup --help
 ```
+
+Check the endpoint end to end with `npm run probe`: it lists the models and tests chat and tool calling on each.
 
 ### How arcode finds the key
 
-- At startup, arcode loads `~/.arcode/.env` (or `$ARCODE_HOME/.env` if you set `ARCODE_HOME`) with Node's built-in `process.loadEnvFile`, then reads `ARC_API_KEY`, falling back to `VTARC_API_KEY` (`src/config.ts`).
-- Variables already set in your shell win over the file, so `export ARC_API_KEY=...` also works (handy for CI or a cluster job).
+- Setup writes `ARC_BASE_URL`, `ARC_API_KEY` and optionally `ARCODE_MODEL` to `~/.arcode/.env` (or `$ARCODE_HOME/.env`), mode 600, keeping any other lines in the file. The variable names say ARC for historical reasons; they hold whatever provider you chose. You can also edit the file by hand; `.env.example` is a template.
+- At startup, arcode loads that file with Node's built-in `process.loadEnvFile`, then reads `ARC_API_KEY`, falling back to `VTARC_API_KEY` (`src/config.ts`).
+- Variables already set in your shell win over the file, so `export ARC_API_KEY=...` also works (handy for CI or a cluster job). Setup warns if a shell variable will override what it saved.
 - A `.env` file **inside a repo is never read**, including this one. arcode works on other people's repos, and their `.env` belongs to them, not to arcode. It also keeps your key out of every project folder, so it can't be committed by accident (`.gitignore` covers `.env`, `.env.*` and `*.env` too).
 - The key is only sent as the `Authorization: Bearer` header to `ARC_BASE_URL`. It is **not** passed to commands the agent runs (`bash`, `run_tests`, `!command`) or to MCP servers, so a model running `env` can't copy it into a trajectory.
-- Using a different provider: set `ARC_BASE_URL` (e.g. a local vLLM server at `http://localhost:8000/v1`) and put that provider's key in `ARC_API_KEY`.
 
-**If it doesn't work:** `ARC_API_KEY is not set` means the file isn't at `~/.arcode/.env` or the variable name is wrong. A `401` from `npm run probe` means the key is invalid or revoked; make a new one on llm.arc.vt.edu.
+**If it doesn't work:** `no API key configured` means there is no key in `~/.arcode/.env` or your shell: run `arcode setup`. `the endpoint rejected the key (401)` means the key is wrong, revoked, or for a different provider than the URL. `command not found: arcode` means the install folder isn't on your PATH: `install.sh` prints the line to add to your shell profile, or use `npm run dev` from the repo.
 
 ## Quick start
 
@@ -65,6 +81,7 @@ arcode -p "task" [--yes]       one task, headless
 arcode --continue              resume latest session for this directory
 arcode --resume <id>           resume a specific session
 arcode --sessions | --models
+arcode setup [--show]          choose a provider, save its API key
 -m <model>  --show-reasoning  --max-turns <n>
 ```
 
@@ -108,8 +125,8 @@ Project instructions: put an `ARCODE.md` (or `AGENTS.md` / `CLAUDE.md`) at the r
 
 | Env | Default |
 |---|---|
-| `ARC_BASE_URL` | `https://llm-api.arc.vt.edu/api/v1` |
-| `ARC_API_KEY` | (required; `VTARC_API_KEY` also accepted) |
+| `ARC_BASE_URL` | `https://llm-api.arc.vt.edu/api/v1` (set by `arcode setup`) |
+| `ARC_API_KEY` | (required; set by `arcode setup`; `VTARC_API_KEY` also accepted) |
 | `ARCODE_MODEL` | first GLM model listed, then DeepSeek |
 | `ARCODE_SUMMARY_MODEL` | same as model |
 | `ARCODE_CONTEXT_BUDGET` | 75% of the model's context window (`src/models.ts`), in estimated tokens before compaction |
